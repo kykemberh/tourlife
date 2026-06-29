@@ -130,6 +130,7 @@
     document.getElementById("overviewAvatar").style.background = me.avatarColor;
     document.getElementById("overviewName").textContent = me.name;
     document.getElementById("overviewEmail").textContent = me.email;
+    document.getElementById("adminTabBtn").style.display = me.isAdmin ? "" : "none";
     loadFeed();
   }
 
@@ -223,17 +224,18 @@
       const card = document.createElement("div");
       card.className = "card";
       const isMine = post.author && post.author.id === me.id;
+      const canDelete = isMine || me.isAdmin;
       card.innerHTML = `
         <div class="post-header">
           <div class="avatar" style="background:${post.author ? post.author.avatarColor : '#999'}">${post.author ? post.author.initials : "?"}</div>
           <div class="post-author">
-            <span class="post-name">${escapeHtml(post.author ? post.author.name : "Користувач видалений")}</span>
+            <span class="post-name">${escapeHtml(post.author ? post.author.name : "Користувач видалений")}</span>${post.author && post.author.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}
             <div class="post-time">${timeAgo(post.createdAt)}</div>
           </div>
           <div class="post-menu-wrap">
             <div class="post-menu" data-menu-id="${post.id}">⋯</div>
             <div class="post-dropdown" id="menu-${post.id}">
-              ${isMine
+              ${canDelete
                 ? `<div class="dropdown-item danger" data-act="delete" data-id="${post.id}">🗑 Видалити пост</div>`
                 : `<div class="dropdown-item danger" data-act="report" data-id="${post.id}">⚠️ Поскаржитися</div>`}
             </div>
@@ -387,7 +389,7 @@
 
   /* ---------------- Nav tabs / views ---------------- */
 
-  const viewMap = { feed: "view-feed", overview: "view-overview", notifications: "view-notifications", messages: "view-messages" };
+  const viewMap = { feed: "view-feed", overview: "view-overview", notifications: "view-notifications", messages: "view-messages", admin: "view-admin" };
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -396,9 +398,48 @@
       document.getElementById(viewMap[tab.dataset.tab]).classList.add("active");
       if (tab.dataset.tab === "notifications") document.getElementById("bellDot").classList.add("hidden");
       if (tab.dataset.tab === "messages") loadConversations();
+      if (tab.dataset.tab === "admin") loadAdminPanel();
       if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
     });
   });
+
+  /* ---------------- Admin panel ---------------- */
+
+  async function loadAdminPanel() {
+    try {
+      const statsData = await api("/api/admin/stats");
+      document.getElementById("adminUserCount").textContent = statsData.stats.userCount;
+      document.getElementById("adminPostCount").textContent = statsData.stats.postCount;
+      document.getElementById("adminCommentCount").textContent = statsData.stats.commentCount;
+      document.getElementById("adminMessageCount").textContent = statsData.stats.messageCount;
+
+      const usersData = await api("/api/admin/users");
+      const listEl = document.getElementById("adminUserList");
+      listEl.innerHTML = usersData.users.map(u => `
+        <div class="conv-item" style="cursor:default;">
+          <div class="avatar sm" style="background:${u.avatarColor}">${initials(u.name)}</div>
+          <div style="flex:1;">
+            <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}</div>
+            <div class="conv-preview">${escapeHtml(u.email)}</div>
+          </div>
+          ${u.id !== me.id ? `<div class="dropdown-item danger" style="cursor:pointer;" data-admin-del-user="${u.id}">🗑 Видалити</div>` : ""}
+        </div>
+      `).join("");
+      listEl.querySelectorAll("[data-admin-del-user]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.adminDelUser;
+          if (!confirm("Видалити цього користувача та весь його контент?")) return;
+          try {
+            await api(`/api/admin/users/${id}`, { method: "DELETE" });
+            showToast("Користувача видалено");
+            loadAdminPanel();
+          } catch (err) { showToast(err.message); }
+        });
+      });
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
 
   document.getElementById("logoBtn").addEventListener("click", () => {
     document.querySelector('.tab[data-tab="feed"]').click();
