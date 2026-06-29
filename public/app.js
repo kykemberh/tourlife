@@ -8,7 +8,14 @@
   let pendingAttachment = null;
   let pendingLocation = null;
   let activeConvUserId = null;
+  let activeConvUser = null;
   let chatPollTimer = null;
+  let notifPollTimer = null;
+  let pendingChatImage = null;
+  let chatViewOnceOn = false;
+  let lastConversations = [];
+  let viewedProfileId = null;
+  let searchDebounce = null;
 
   /* ---------------- helpers ---------------- */
 
@@ -35,6 +42,34 @@
 
   function initials(name) {
     return (name || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+  }
+
+  function avatarHtml(user, extraClass) {
+    extraClass = extraClass || "";
+    if (!user) return `<div class="avatar ${extraClass}" style="background:#999">?</div>`;
+    const ini = user.initials || initials(user.name);
+    if (user.avatarUrl) {
+      return `<div class="avatar ${extraClass}"><img src="${escapeHtml(user.avatarUrl)}" alt=""></div>`;
+    }
+    return `<div class="avatar ${extraClass}" style="background:${user.avatarColor}">${ini}</div>`;
+  }
+
+  function setAvatarEl(el, user) {
+    if (!el) return;
+    el.innerHTML = "";
+    if (user && user.avatarUrl) {
+      el.style.background = "transparent";
+      const img = document.createElement("img");
+      img.src = user.avatarUrl;
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "cover";
+      img.style.borderRadius = "50%";
+      el.appendChild(img);
+    } else {
+      el.style.background = user ? user.avatarColor : "#999";
+      el.textContent = user ? initials(user.name) : "?";
+    }
   }
 
   function timeAgo(ts) {
@@ -122,16 +157,21 @@
   function enterApp() {
     authScreen.style.display = "none";
     appRoot.style.display = "block";
-    document.getElementById("avatarBtn").textContent = initials(me.name);
-    document.getElementById("avatarBtn").style.background = me.avatarColor;
-    document.getElementById("composerAvatar").textContent = initials(me.name);
-    document.getElementById("composerAvatar").style.background = me.avatarColor;
-    document.getElementById("overviewAvatar").textContent = initials(me.name);
-    document.getElementById("overviewAvatar").style.background = me.avatarColor;
-    document.getElementById("overviewName").textContent = me.name;
-    document.getElementById("overviewEmail").textContent = me.email;
+    refreshMeUi();
     document.getElementById("adminTabBtn").style.display = me.isAdmin ? "" : "none";
     loadFeed();
+    loadNotifications();
+    if (notifPollTimer) clearInterval(notifPollTimer);
+    notifPollTimer = setInterval(loadNotifications, 15000);
+  }
+
+  function refreshMeUi() {
+    setAvatarEl(document.getElementById("avatarBtn"), me);
+    setAvatarEl(document.getElementById("composerAvatar"), me);
+    setAvatarEl(document.getElementById("overviewAvatar"), me);
+    document.getElementById("overviewName").textContent = me.name;
+    document.getElementById("overviewEmail").textContent = me.email;
+    document.getElementById("overviewBio").textContent = me.bio || "";
   }
 
   /* ---------------- Feed ---------------- */
@@ -171,8 +211,16 @@
         if (el.dataset.clear === "attachment") pendingAttachment = null;
         if (el.dataset.clear === "location") pendingLocation = null;
         renderChips();
+        updatePublishState();
       });
     });
+    updatePublishState();
+  }
+
+  function updatePublishState() {
+    const hasText = postInput.value.trim().length > 0;
+    const hasImage = !!(pendingAttachment && pendingAttachment.dataUrl);
+    publishBtn.disabled = !hasText && !hasImage;
   }
 
   document.getElementById("photoBtn").addEventListener("click", () => {
@@ -187,10 +235,28 @@
     const file = e.target.files[0];
     if (!file) return;
     const kind = e.target.getAttribute("data-kind") || "photo";
-    pendingAttachment = { type: kind, name: file.name };
-    renderChips();
-    showToast((kind === "photo" ? "Фото" : "Відео") + " додано до поста (демо — без реального завантаження файлу)");
     e.target.value = "";
+
+    if (kind === "video") {
+      // Real video upload/streaming isn't supported yet — keep as a placeholder chip.
+      pendingAttachment = { type: kind, name: file.name, dataUrl: null };
+      renderChips();
+      showToast("Відео додано як позначка (демо — без реального завантаження файлу)");
+      return;
+    }
+
+    if (file.size > 6_000_000) {
+      showToast("Фото занадто велике (максимум 6 МБ)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingAttachment = { type: kind, name: file.name, dataUrl: reader.result };
+      renderChips();
+      showToast("Фото додано до поста");
+    };
+    reader.onerror = () => showToast("Не вдалося прочитати файл");
+    reader.readAsDataURL(file);
   });
   document.getElementById("locationBtn").addEventListener("click", () => {
     const loc = prompt("Вкажіть місце:");
@@ -227,8 +293,8 @@
       const canDelete = isMine || me.isAdmin;
       card.innerHTML = `
         <div class="post-header">
-          <div class="avatar" style="background:${post.author ? post.author.avatarColor : '#999'}">${post.author ? post.author.initials : "?"}</div>
-          <div class="post-author">
+          <div class="${post.author ? 'clickable-user' : ''}" data-open-profile="${post.author ? post.author.id : ''}">${avatarHtml(post.author)}</div>
+          <div class="post-author ${post.author ? 'clickable-user' : ''}" data-open-profile="${post.author ? post.author.id : ''}">
             <span class="post-name">${escapeHtml(post.author ? post.author.name : "Користувач видалений")}</span>${post.author && post.author.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}
             <div class="post-time">${timeAgo(post.createdAt)}</div>
           </div>
@@ -241,7 +307,8 @@
             </div>
           </div>
         </div>
-        <div class="post-text">${escapeHtml(post.text)}</div>
+        ${post.text ? `<div class="post-text">${escapeHtml(post.text)}</div>` : ""}
+        ${post.imageUrl ? `<img src="${escapeHtml(post.imageUrl)}" class="post-image" alt="Фото до поста">` : ""}
         <div class="post-actions">
           <div class="action like-action ${post.likedByMe ? "liked" : ""}" data-id="${post.id}">
             <span>${post.likedByMe ? "❤️" : "🤍"}</span><span class="like-count">${post.likeCount}</span>
@@ -251,7 +318,7 @@
         <div class="comments-section ${openCommentId === post.id ? "open" : ""}" id="comments-${post.id}">
           <div class="comment-list" id="comment-list-${post.id}"><div class="comment-empty">Завантаження...</div></div>
           <div class="comment-input-row">
-            <div class="avatar sm" style="background:${me.avatarColor}">${initials(me.name)}</div>
+            ${avatarHtml(me, "sm")}
             <input type="text" placeholder="Написати коментар..." data-comment-input="${post.id}">
             <button class="comment-send" data-comment-send="${post.id}">➤</button>
           </div>
@@ -260,6 +327,13 @@
       feedEl.appendChild(card);
     });
 
+    feedEl.querySelectorAll("[data-open-profile]").forEach(el => {
+      if (!el.dataset.openProfile) return;
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openProfile(parseInt(el.dataset.openProfile, 10));
+      });
+    });
     feedEl.querySelectorAll(".like-action").forEach(el => {
       el.addEventListener("click", () => toggleLike(parseInt(el.dataset.id, 10)));
     });
@@ -324,13 +398,17 @@
       }
       listEl.innerHTML = data.comments.map(c => `
         <div class="comment-item">
-          <div class="avatar sm" style="background:${c.author ? c.author.avatarColor : '#999'}">${c.author ? c.author.initials : "?"}</div>
+          <div class="clickable-user" data-open-profile="${c.author ? c.author.id : ''}">${avatarHtml(c.author, "sm")}</div>
           <div class="comment-bubble">
-            <span class="comment-author">${escapeHtml(c.author ? c.author.name : "Користувач")}</span>${escapeHtml(c.text)}
+            <span class="comment-author clickable-user" data-open-profile="${c.author ? c.author.id : ''}">${escapeHtml(c.author ? c.author.name : "Користувач")}</span>${escapeHtml(c.text)}
             <div class="comment-time">${timeAgo(c.createdAt)}</div>
           </div>
         </div>
       `).join("");
+      listEl.querySelectorAll("[data-open-profile]").forEach(el => {
+        if (!el.dataset.openProfile) return;
+        el.addEventListener("click", (e) => { e.stopPropagation(); openProfile(parseInt(el.dataset.openProfile, 10)); });
+      });
     } catch (err) {
       listEl.innerHTML = `<div class="comment-empty">Не вдалося завантажити коментарі</div>`;
     }
@@ -362,18 +440,25 @@
   }
 
   postInput.addEventListener("input", () => {
-    publishBtn.disabled = postInput.value.trim().length === 0;
+    updatePublishState();
     postInput.style.height = "auto";
     postInput.style.height = postInput.scrollHeight + "px";
   });
 
   publishBtn.addEventListener("click", async () => {
     let text = postInput.value.trim();
-    if (!text) return;
-    if (pendingLocation) text += "\n📍 " + pendingLocation;
-    if (pendingAttachment) text += "\n" + (pendingAttachment.type === "photo" ? "📷" : "🎥") + " " + pendingAttachment.name;
+    if (!text && !(pendingAttachment && pendingAttachment.dataUrl)) return;
+    if (pendingLocation) text += (text ? "\n" : "") + "📍 " + pendingLocation;
+    if (pendingAttachment && !pendingAttachment.dataUrl) {
+      // video placeholder — no real upload yet
+      text += (text ? "\n" : "") + "🎥 " + pendingAttachment.name;
+    }
+    const payload = { text };
+    if (pendingAttachment && pendingAttachment.dataUrl) {
+      payload.image = pendingAttachment.dataUrl;
+    }
     try {
-      await api("/api/posts", { method: "POST", body: JSON.stringify({ text }) });
+      await api("/api/posts", { method: "POST", body: JSON.stringify(payload) });
       postInput.value = "";
       postInput.style.height = "auto";
       publishBtn.disabled = true;
@@ -389,18 +474,21 @@
 
   /* ---------------- Nav tabs / views ---------------- */
 
-  const viewMap = { feed: "view-feed", overview: "view-overview", notifications: "view-notifications", messages: "view-messages", admin: "view-admin" };
-  document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-      tab.classList.add("active");
-      Object.values(viewMap).forEach(id => document.getElementById(id).classList.remove("active"));
-      document.getElementById(viewMap[tab.dataset.tab]).classList.add("active");
-      if (tab.dataset.tab === "notifications") document.getElementById("bellDot").classList.add("hidden");
-      if (tab.dataset.tab === "messages") loadConversations();
-      if (tab.dataset.tab === "admin") loadAdminPanel();
-      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
-    });
+  const viewMap = { feed: "view-feed", overview: "view-overview", profile: "view-profile", notifications: "view-notifications", messages: "view-messages", admin: "view-admin" };
+
+  function switchTab(tabName) {
+    document.querySelectorAll(".tab, .bn-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tabName));
+    Object.values(viewMap).forEach(id => document.getElementById(id).classList.remove("active"));
+    const viewId = viewMap[tabName];
+    if (viewId) document.getElementById(viewId).classList.add("active");
+    if (tabName === "notifications") { markNotificationsRead(); loadFullNotifications(); }
+    if (tabName === "messages") { loadConversations(); document.getElementById("messagesLayout").classList.remove("chat-open"); }
+    if (tabName === "admin") loadAdminPanel();
+    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  }
+
+  document.querySelectorAll(".tab, .bn-tab").forEach(tab => {
+    tab.addEventListener("click", () => switchTab(tab.dataset.tab));
   });
 
   /* ---------------- Admin panel ---------------- */
@@ -417,7 +505,7 @@
       const listEl = document.getElementById("adminUserList");
       listEl.innerHTML = usersData.users.map(u => `
         <div class="conv-item" style="cursor:default;">
-          <div class="avatar sm" style="background:${u.avatarColor}">${initials(u.name)}</div>
+          ${avatarHtml(u, "sm")}
           <div style="flex:1;">
             <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}</div>
             <div class="conv-preview">${escapeHtml(u.email)}</div>
@@ -441,9 +529,7 @@
     }
   }
 
-  document.getElementById("logoBtn").addEventListener("click", () => {
-    document.querySelector('.tab[data-tab="feed"]').click();
-  });
+  document.getElementById("logoBtn").addEventListener("click", () => switchTab("feed"));
 
   /* ---------------- Bell & avatar dropdowns ---------------- */
 
@@ -454,7 +540,7 @@
     e.stopPropagation();
     avatarDropdown.classList.remove("open");
     bellDropdown.classList.toggle("open");
-    document.getElementById("bellDot").classList.add("hidden");
+    if (bellDropdown.classList.contains("open")) markNotificationsRead();
   });
   document.getElementById("avatarBtn").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -464,11 +550,12 @@
   avatarDropdown.querySelectorAll(".dropdown-item").forEach(item => {
     item.addEventListener("click", () => {
       const act = item.dataset.action;
-      if (act === "profile") document.querySelector('.tab[data-tab="overview"]').click();
-      if (act === "settings") showToast("Налаштування поки в розробці");
+      if (act === "profile") switchTab("overview");
+      if (act === "settings") openSettingsModal();
       if (act === "logout") {
         clearToken();
         me = null;
+        if (notifPollTimer) { clearInterval(notifPollTimer); notifPollTimer = null; }
         showAuth();
       }
       avatarDropdown.classList.remove("open");
@@ -480,8 +567,198 @@
     avatarDropdown.classList.remove("open");
     emojiPicker.classList.remove("open");
     document.querySelectorAll(".post-dropdown").forEach(d => d.classList.remove("open"));
+    document.getElementById("searchResults").classList.remove("open");
     openMenuId = null;
   });
+
+  /* ---------------- Profiles ---------------- */
+
+  async function openProfile(userId) {
+    if (!userId) return;
+    if (userId === me.id) { switchTab("overview"); return; }
+    viewedProfileId = userId;
+    Object.values(viewMap).forEach(id => document.getElementById(id).classList.remove("active"));
+    document.querySelectorAll(".tab, .bn-tab").forEach(t => t.classList.remove("active"));
+    document.getElementById("view-profile").classList.add("active");
+    document.getElementById("profileName").textContent = "Завантаження...";
+    document.getElementById("profileBio").textContent = "";
+    document.getElementById("profilePosts").innerHTML = "";
+    try {
+      const data = await api(`/api/users/${userId}`);
+      const u = data.user;
+      setAvatarEl(document.getElementById("profileAvatar"), u);
+      document.getElementById("profileName").innerHTML = escapeHtml(u.name) + (u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : "");
+      document.getElementById("profileMeta").textContent = u.email;
+      document.getElementById("profileBio").textContent = u.bio || "";
+      document.getElementById("profilePostCount").textContent = u.postCount || 0;
+      const postsData = await api(`/api/users/${userId}/posts`);
+      const container = document.getElementById("profilePosts");
+      if (!postsData.posts.length) {
+        container.innerHTML = `<div class="placeholder-card"><div class="big">📭</div>Поки немає постів</div>`;
+        return;
+      }
+      container.innerHTML = postsData.posts.map(p => `
+        <div class="card">
+          <div class="post-text">${escapeHtml(p.text)}</div>
+          ${p.imageUrl ? `<img src="${escapeHtml(p.imageUrl)}" class="post-image" alt="">` : ""}
+          <div class="post-actions">
+            <div class="action ${p.likedByMe ? "liked" : ""}"><span>${p.likedByMe ? "❤️" : "🤍"}</span><span>${p.likeCount}</span></div>
+            <div class="action"><span>💬</span><span>${p.commentCount}</span></div>
+          </div>
+        </div>
+      `).join("");
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  document.getElementById("profileBackLink").addEventListener("click", () => switchTab("feed"));
+
+  /* ---------------- Settings modal ---------------- */
+
+  const settingsModal = document.getElementById("settingsModal");
+  let pendingAvatarDataUrl = null;
+
+  function openSettingsModal() {
+    document.getElementById("settingsName").value = me.name;
+    document.getElementById("settingsBio").value = me.bio || "";
+    setAvatarEl(document.getElementById("settingsAvatarPreview"), me);
+    pendingAvatarDataUrl = null;
+    settingsModal.classList.add("open");
+  }
+  document.getElementById("settingsCancelBtn").addEventListener("click", () => settingsModal.classList.remove("open"));
+  document.getElementById("changePhotoBtn").addEventListener("click", () => document.getElementById("avatarFileInput").click());
+  document.getElementById("avatarFileInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 6_000_000) { showToast("Фото занадто велике (максимум 6 МБ)"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingAvatarDataUrl = reader.result;
+      const preview = document.getElementById("settingsAvatarPreview");
+      preview.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = pendingAvatarDataUrl;
+      img.style.width = "100%"; img.style.height = "100%"; img.style.objectFit = "cover"; img.style.borderRadius = "50%";
+      preview.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById("settingsSaveBtn").addEventListener("click", async () => {
+    const name = document.getElementById("settingsName").value.trim();
+    const bio = document.getElementById("settingsBio").value.trim();
+    if (!name) { showToast("Ім'я не може бути порожнім"); return; }
+    const payload = { name, bio };
+    if (pendingAvatarDataUrl) payload.avatar = pendingAvatarDataUrl;
+    try {
+      const data = await api("/api/me", { method: "PUT", body: JSON.stringify(payload) });
+      me = data.user;
+      refreshMeUi();
+      settingsModal.classList.remove("open");
+      showToast("Профіль оновлено");
+      loadFeed();
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  /* ---------------- Notifications ---------------- */
+
+  function notifText(n) {
+    const name = n.actor ? n.actor.name : "Хтось";
+    if (n.type === "like") return `<b>${escapeHtml(name)}</b> вподобав(ла) ваш пост`;
+    if (n.type === "comment") return `<b>${escapeHtml(name)}</b> прокоментував(ла) ваш пост`;
+    return `<b>${escapeHtml(name)}</b> взаємодіяв(ла) з вашим контентом`;
+  }
+  function notifIcon(n) { return n.type === "like" ? "❤️" : n.type === "comment" ? "💬" : "🔔"; }
+
+  async function loadNotifications() {
+    if (!me) return;
+    try {
+      const data = await api("/api/notifications");
+      const dot = !!data.unreadCount;
+      document.getElementById("bellDot").classList.toggle("hidden", !dot);
+      document.getElementById("bnDot").classList.toggle("show", dot);
+      const listEl = document.getElementById("bellNotifList");
+      if (!data.notifications.length) {
+        listEl.innerHTML = `<div class="notif-list-empty">Тут з'являтимуться лайки, коментарі та підписки.</div>`;
+        return;
+      }
+      listEl.innerHTML = data.notifications.slice(0, 8).map(n => `
+        <div class="notif-item clickable" data-open-profile="${n.actor ? n.actor.id : ''}">
+          <span class="nf-icon">${notifIcon(n)}</span>${notifText(n)}
+          <div class="notif-time">${timeAgo(n.createdAt)}</div>
+        </div>
+      `).join("");
+      listEl.querySelectorAll("[data-open-profile]").forEach(el => {
+        el.addEventListener("click", (e) => { e.stopPropagation(); bellDropdown.classList.remove("open"); openProfile(parseInt(el.dataset.openProfile, 10)); });
+      });
+    } catch (err) { /* silent */ }
+  }
+
+  async function loadFullNotifications() {
+    try {
+      const data = await api("/api/notifications");
+      const container = document.getElementById("fullNotifList");
+      if (!data.notifications.length) {
+        container.innerHTML = `<div class="placeholder-card"><div class="big">🔔</div>Сповіщення про лайки, коментарі та підписки з'являться тут.</div>`;
+        return;
+      }
+      container.innerHTML = data.notifications.map(n => `
+        <div class="notif-item clickable" data-open-profile="${n.actor ? n.actor.id : ''}">
+          <span class="nf-icon">${notifIcon(n)}</span>${notifText(n)}
+          <div class="notif-time">${timeAgo(n.createdAt)}</div>
+        </div>
+      `).join("");
+      container.querySelectorAll("[data-open-profile]").forEach(el => {
+        el.addEventListener("click", () => openProfile(parseInt(el.dataset.openProfile, 10)));
+      });
+    } catch (err) { showToast(err.message); }
+  }
+
+  async function markNotificationsRead() {
+    document.getElementById("bellDot").classList.add("hidden");
+    document.getElementById("bnDot").classList.remove("show");
+    try { await api("/api/notifications/read", { method: "POST" }); } catch (e) { /* silent */ }
+  }
+
+  /* ---------------- User search ---------------- */
+
+  const userSearchInput = document.getElementById("userSearchInput");
+  const searchResultsEl = document.getElementById("searchResults");
+  userSearchInput.addEventListener("input", () => {
+    clearTimeout(searchDebounce);
+    const q = userSearchInput.value.trim();
+    if (!q) { searchResultsEl.classList.remove("open"); return; }
+    searchDebounce = setTimeout(async () => {
+      try {
+        const data = await api(`/api/users?q=${encodeURIComponent(q)}`);
+        if (!data.users.length) {
+          searchResultsEl.innerHTML = `<div class="notif-list-empty">Нікого не знайдено</div>`;
+        } else {
+          searchResultsEl.innerHTML = data.users.map(u => `
+            <div class="user-pick-item" data-open-profile="${u.id}">
+              ${avatarHtml(u, "sm")}
+              <div>
+                <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}</div>
+                <div class="conv-preview">${escapeHtml(u.email)}</div>
+              </div>
+            </div>
+          `).join("");
+          searchResultsEl.querySelectorAll("[data-open-profile]").forEach(el => {
+            el.addEventListener("click", () => {
+              openProfile(parseInt(el.dataset.openProfile, 10));
+              searchResultsEl.classList.remove("open");
+              userSearchInput.value = "";
+            });
+          });
+        }
+        searchResultsEl.classList.add("open");
+      } catch (err) { /* silent */ }
+    }, 300);
+  });
+  userSearchInput.addEventListener("click", (e) => e.stopPropagation());
 
   /* ---------------- Messages ---------------- */
 
@@ -490,9 +767,10 @@
   const chatActive = document.getElementById("chatActive");
   const chatMessagesEl = document.getElementById("chatMessages");
 
-  async function loadConversations() {
+  async function loadConversations(q) {
     try {
-      const data = await api("/api/conversations");
+      const data = await api(`/api/conversations${q ? "?q=" + encodeURIComponent(q) : ""}`);
+      lastConversations = data.conversations;
       convListEl.innerHTML = "";
       if (!data.conversations.length) {
         convListEl.innerHTML = `<div class="comment-empty" style="padding:12px;">Немає розмов. Натисніть "+ Нове".</div>`;
@@ -502,7 +780,7 @@
         const item = document.createElement("div");
         item.className = "conv-item" + (activeConvUserId === c.user.id ? " active" : "");
         item.innerHTML = `
-          <div class="avatar sm" style="background:${c.user.avatarColor}">${c.user.initials}</div>
+          ${avatarHtml(c.user, "sm")}
           <div>
             <div class="conv-name">${escapeHtml(c.user.name)}</div>
             <div class="conv-preview">${c.lastMessage.fromMe ? "Ви: " : ""}${escapeHtml(c.lastMessage.text)}</div>
@@ -516,26 +794,53 @@
     }
   }
 
+  document.getElementById("convSearchInput").addEventListener("input", (e) => {
+    loadConversations(e.target.value.trim());
+  });
+
   function openChat(user) {
     activeConvUserId = user.id;
+    activeConvUser = user;
     chatPlaceholder.style.display = "none";
     chatActive.style.display = "flex";
-    document.getElementById("chatAvatar").textContent = user.initials;
-    document.getElementById("chatAvatar").style.background = user.avatarColor;
+    setAvatarEl(document.getElementById("chatAvatar"), user);
     document.getElementById("chatName").textContent = user.name;
+    document.getElementById("messagesLayout").classList.add("chat-open");
+    clearPendingChatImage();
+    chatViewOnceOn = false;
+    document.getElementById("chatViewOnceBtn").classList.remove("active");
     loadConversations();
     loadMessages();
     if (chatPollTimer) clearInterval(chatPollTimer);
     chatPollTimer = setInterval(loadMessages, 4000);
   }
 
+  document.getElementById("chatBackBtn").addEventListener("click", () => {
+    document.getElementById("messagesLayout").classList.remove("chat-open");
+  });
+
+  function renderMessageBubble(m) {
+    if (m.viewOnceConsumed) {
+      return `<div class="view-once-gone">🔥 Фото переглянуто</div>`;
+    }
+    let inner = "";
+    if (m.imageUrl) {
+      inner += `<img src="${escapeHtml(m.imageUrl)}" class="msg-image" alt="">`;
+      if (m.viewOnce) inner += `<div class="view-once-tag">🔥 Перегляд один раз</div>`;
+    }
+    if (m.text) inner += `<div${m.imageUrl ? ' style="margin-top:6px;"' : ''}>${escapeHtml(m.text)}</div>`;
+    const bubbleClass = "msg-bubble " + (m.fromMe ? "mine" : "theirs") + (m.imageUrl && !m.text ? " image-bubble" : "");
+    return `<div class="${bubbleClass}">${inner}</div>`;
+  }
+
   async function loadMessages() {
     if (!activeConvUserId) return;
     try {
       const data = await api(`/api/messages/${activeConvUserId}`);
-      chatMessagesEl.innerHTML = data.messages.map(m => `
-        <div class="msg-bubble ${m.fromMe ? "mine" : "theirs"}">${escapeHtml(m.text)}</div>
-      `).join("");
+      chatMessagesEl.innerHTML = data.messages.map(renderMessageBubble).join("");
+      chatMessagesEl.querySelectorAll(".msg-image").forEach(img => {
+        img.addEventListener("click", () => window.open(img.src, "_blank"));
+      });
       chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     } catch (err) {
       // silent fail on poll
@@ -547,13 +852,46 @@
     if (e.key === "Enter") sendChatMessage();
   });
 
+  document.getElementById("chatPhotoBtn").addEventListener("click", () => document.getElementById("chatFileInput").click());
+  document.getElementById("chatFileInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 6_000_000) { showToast("Фото занадто велике (максимум 6 МБ)"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingChatImage = reader.result;
+      const preview = document.getElementById("pendingImagePreview");
+      preview.style.display = "flex";
+      document.getElementById("pendingImagePreviewImg").src = pendingChatImage;
+      document.getElementById("pendingImageLabel").textContent = chatViewOnceOn ? "🔥 Перегляд один раз" : "Фото готове до відправки";
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById("pendingImageClear").addEventListener("click", clearPendingChatImage);
+  function clearPendingChatImage() {
+    pendingChatImage = null;
+    document.getElementById("pendingImagePreview").style.display = "none";
+  }
+  document.getElementById("chatViewOnceBtn").addEventListener("click", () => {
+    chatViewOnceOn = !chatViewOnceOn;
+    document.getElementById("chatViewOnceBtn").classList.toggle("active", chatViewOnceOn);
+    if (pendingChatImage) document.getElementById("pendingImageLabel").textContent = chatViewOnceOn ? "🔥 Перегляд один раз" : "Фото готове до відправки";
+    showToast(chatViewOnceOn ? "Наступне фото зникне після перегляду" : "Режим одного перегляду вимкнено");
+  });
+
   async function sendChatMessage() {
     const input = document.getElementById("chatInput");
     const text = input.value.trim();
-    if (!text || !activeConvUserId) return;
+    if ((!text && !pendingChatImage) || !activeConvUserId) return;
+    const payload = { text };
+    if (pendingChatImage) { payload.image = pendingChatImage; payload.viewOnce = chatViewOnceOn; }
     try {
-      await api(`/api/messages/${activeConvUserId}`, { method: "POST", body: JSON.stringify({ text }) });
+      await api(`/api/messages/${activeConvUserId}`, { method: "POST", body: JSON.stringify(payload) });
       input.value = "";
+      clearPendingChatImage();
+      chatViewOnceOn = false;
+      document.getElementById("chatViewOnceBtn").classList.remove("active");
       await loadMessages();
       await loadConversations();
     } catch (err) {
