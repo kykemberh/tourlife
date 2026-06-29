@@ -80,6 +80,18 @@
     return Math.floor(diff / 86400) + " дн тому";
   }
 
+  const ICONS = {
+    heart: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5 4.6 13a4.6 4.6 0 0 1 6.9-6.1l.5.5.5-.5a4.6 4.6 0 0 1 6.9 6.1Z"/></svg>`,
+    heartFill: `<svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><path d="M12 20.5 4.6 13a4.6 4.6 0 0 1 6.9-6.1l.5.5.5-.5a4.6 4.6 0 0 1 6.9 6.1Z"/></svg>`,
+    comment: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>`,
+    handshake: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12l4-4 4 4-4 4Z"/><path d="M6 8l4.5-4 4 1 1.5 1.5"/><path d="M10 12l3 3a2 2 0 1 0 3-3l-3.5-3.5"/><path d="M13 9l1.5-1.5a2 2 0 1 1 3 3L16 12"/><path d="M22 12l-4 4-4-4 4-4Z"/></svg>`,
+    bell: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 3.5-1 5.5-2 7h16c-1-1.5-2-3.5-2-7Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>`,
+    trash: `<svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"/></svg>`,
+    warning: `<svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20Z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>`,
+    fire: `<svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c2 3-2 4-2 7a4 4 0 0 0 8 0c0-1-.5-2-1-2.5.5 2-1 3-2 2 1-2-1-4-3-4.5Z"/><path d="M7 14a5 5 0 0 0 10 0c0-2-1-3-2-4 .5 2.5-1 4-3 4.5-1.5.5-3-1-3-2.5-1 .5-2 1.5-2 2Z"/></svg>`,
+    photo: `<svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></svg>`
+  };
+
   const toastEl = document.getElementById("toast");
   function showToast(msg) {
     toastEl.textContent = msg;
@@ -310,8 +322,8 @@
             <div class="post-menu" data-menu-id="${post.id}">⋯</div>
             <div class="post-dropdown" id="menu-${post.id}">
               ${canDelete
-                ? `<div class="dropdown-item danger" data-act="delete" data-id="${post.id}">🗑 Видалити пост</div>`
-                : `<div class="dropdown-item danger" data-act="report" data-id="${post.id}">⚠️ Поскаржитися</div>`}
+                ? `<div class="dropdown-item danger" data-act="delete" data-id="${post.id}">${ICONS.trash} Видалити пост</div>`
+                : `<div class="dropdown-item danger" data-act="report" data-id="${post.id}">${ICONS.warning} Поскаржитися</div>`}
             </div>
           </div>
         </div>
@@ -319,9 +331,9 @@
         ${post.imageUrl ? `<img src="${escapeHtml(post.imageUrl)}" class="post-image" alt="Фото до поста">` : ""}
         <div class="post-actions">
           <div class="action like-action ${post.likedByMe ? "liked" : ""}" data-id="${post.id}">
-            <span>${post.likedByMe ? "❤️" : "🤍"}</span><span class="like-count">${post.likeCount}</span>
+            <span>${post.likedByMe ? ICONS.heartFill : ICONS.heart}</span><span class="like-count">${post.likeCount}</span>
           </div>
-          <div class="action comment-action" data-id="${post.id}"><span>💬</span><span>${post.commentCount}</span></div>
+          <div class="action comment-action" data-id="${post.id}"><span>${ICONS.comment}</span><span>${post.commentCount}</span></div>
         </div>
         <div class="comments-section ${openCommentId === post.id ? "open" : ""}" id="comments-${post.id}">
           <div class="comment-list" id="comment-list-${post.id}"><div class="comment-empty">Завантаження...</div></div>
@@ -612,8 +624,8 @@
           <div class="post-text">${escapeHtml(p.text)}</div>
           ${p.imageUrl ? `<img src="${escapeHtml(p.imageUrl)}" class="post-image" alt="">` : ""}
           <div class="post-actions">
-            <div class="action ${p.likedByMe ? "liked" : ""}"><span>${p.likedByMe ? "❤️" : "🤍"}</span><span>${p.likeCount}</span></div>
-            <div class="action"><span>💬</span><span>${p.commentCount}</span></div>
+            <div class="action ${p.likedByMe ? "liked" : ""}"><span>${p.likedByMe ? ICONS.heartFill : ICONS.heart}</span><span>${p.likeCount}</span></div>
+            <div class="action"><span>${ICONS.comment}</span><span>${p.commentCount}</span></div>
           </div>
         </div>
       `).join("");
@@ -790,7 +802,7 @@
     if (n.type === "friend_accept") return `<b>${escapeHtml(name)}</b> прийняв(ла) ваш запит у друзі`;
     return `<b>${escapeHtml(name)}</b> взаємодіяв(ла) з вашим контентом`;
   }
-  function notifIcon(n) { return n.type === "like" ? "❤️" : n.type === "comment" ? "💬" : (n.type === "friend_request" || n.type === "friend_accept") ? "🤝" : "🔔"; }
+  function notifIcon(n) { return n.type === "like" ? ICONS.heartFill : n.type === "comment" ? ICONS.comment : (n.type === "friend_request" || n.type === "friend_accept") ? ICONS.handshake : ICONS.bell; }
 
   async function loadNotifications() {
     if (!me) return;
@@ -940,12 +952,12 @@
 
   function renderMessageBubble(m) {
     if (m.viewOnceConsumed) {
-      return `<div class="view-once-gone">🔥 Фото переглянуто</div>`;
+      return `<div class="view-once-gone">${ICONS.fire} Фото переглянуто</div>`;
     }
     let inner = "";
     if (m.imageUrl) {
       inner += `<img src="${escapeHtml(m.imageUrl)}" class="msg-image" alt="">`;
-      if (m.viewOnce) inner += `<div class="view-once-tag">🔥 Перегляд один раз</div>`;
+      if (m.viewOnce) inner += `<div class="view-once-tag">${ICONS.fire} Перегляд один раз</div>`;
     }
     if (m.text) inner += `<div${m.imageUrl ? ' style="margin-top:6px;"' : ''}>${escapeHtml(m.text)}</div>`;
     const bubbleClass = "msg-bubble " + (m.fromMe ? "mine" : "theirs") + (m.imageUrl && !m.text ? " image-bubble" : "");
