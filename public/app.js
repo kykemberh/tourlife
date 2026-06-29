@@ -169,9 +169,17 @@
     setAvatarEl(document.getElementById("avatarBtn"), me);
     setAvatarEl(document.getElementById("composerAvatar"), me);
     setAvatarEl(document.getElementById("overviewAvatar"), me);
-    document.getElementById("overviewName").textContent = me.name;
+    document.getElementById("overviewName").innerHTML = escapeHtml(me.name) + (me.isAdmin ? `<span class="founder-crown">👑 Founder</span>` : "");
     document.getElementById("overviewEmail").textContent = me.email;
     document.getElementById("overviewBio").textContent = me.bio || "";
+    loadMyFriendsCount();
+  }
+
+  async function loadMyFriendsCount() {
+    try {
+      const data = await api(`/api/users/${me.id}/friends`);
+      document.getElementById("overviewFriendsCount").textContent = data.friends.length;
+    } catch (err) { /* silent */ }
   }
 
   /* ---------------- Feed ---------------- */
@@ -295,7 +303,7 @@
         <div class="post-header">
           <div class="${post.author ? 'clickable-user' : ''}" data-open-profile="${post.author ? post.author.id : ''}">${avatarHtml(post.author)}</div>
           <div class="post-author ${post.author ? 'clickable-user' : ''}" data-open-profile="${post.author ? post.author.id : ''}">
-            <span class="post-name">${escapeHtml(post.author ? post.author.name : "Користувач видалений")}</span>${post.author && post.author.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}
+            <span class="post-name">${escapeHtml(post.author ? post.author.name : "Користувач видалений")}</span>${post.author && post.author.isAdmin ? `<span class="founder-crown">👑 Founder</span>` : ""}
             <div class="post-time">${timeAgo(post.createdAt)}</div>
           </div>
           <div class="post-menu-wrap">
@@ -481,7 +489,7 @@
     Object.values(viewMap).forEach(id => document.getElementById(id).classList.remove("active"));
     const viewId = viewMap[tabName];
     if (viewId) document.getElementById(viewId).classList.add("active");
-    if (tabName === "notifications") { markNotificationsRead(); loadFullNotifications(); }
+    if (tabName === "notifications") { markNotificationsRead(); loadFullNotifications(); loadFriendRequests(); }
     if (tabName === "messages") { loadConversations(); document.getElementById("messagesLayout").classList.remove("chat-open"); }
     if (tabName === "admin") loadAdminPanel();
     if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
@@ -507,7 +515,7 @@
         <div class="conv-item" style="cursor:default;">
           ${avatarHtml(u, "sm")}
           <div style="flex:1;">
-            <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}</div>
+            <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-crown">👑 Founder</span>` : ""}</div>
             <div class="conv-preview">${escapeHtml(u.email)}</div>
           </div>
           ${u.id !== me.id ? `<div class="dropdown-item danger" style="cursor:pointer;" data-admin-del-user="${u.id}">🗑 Видалити</div>` : ""}
@@ -587,10 +595,12 @@
       const data = await api(`/api/users/${userId}`);
       const u = data.user;
       setAvatarEl(document.getElementById("profileAvatar"), u);
-      document.getElementById("profileName").innerHTML = escapeHtml(u.name) + (u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : "");
+      document.getElementById("profileName").innerHTML = escapeHtml(u.name) + (u.isAdmin ? `<span class="founder-crown">👑 Founder</span>` : "");
       document.getElementById("profileMeta").textContent = u.email;
       document.getElementById("profileBio").textContent = u.bio || "";
       document.getElementById("profilePostCount").textContent = u.postCount || 0;
+      document.getElementById("profileFriendsCount").textContent = u.friendsCount || 0;
+      renderFriendActions(userId, u.friendStatus);
       const postsData = await api(`/api/users/${userId}/posts`);
       const container = document.getElementById("profilePosts");
       if (!postsData.posts.length) {
@@ -614,6 +624,75 @@
 
   document.getElementById("profileBackLink").addEventListener("click", () => switchTab("feed"));
 
+  /* ---------------- Friends ---------------- */
+
+  function renderFriendActions(userId, status) {
+    const el = document.getElementById("profileFriendActions");
+    if (!el) return;
+    let html = "";
+    if (status === "friends") {
+      html = `<button class="friend-btn remove" data-friend-act="remove">✓ Друзі — видалити</button>`;
+    } else if (status === "request_sent") {
+      html = `<button class="friend-btn pending" data-friend-act="cancel">⏳ Запит надіслано — скасувати</button>`;
+    } else if (status === "request_received") {
+      html = `<button class="friend-btn accept" data-friend-act="accept">✓ Прийняти запит</button><button class="friend-btn decline" data-friend-act="decline">✕ Відхилити</button>`;
+    } else {
+      html = `<button class="friend-btn add" data-friend-act="add">+ Додати в друзі</button>`;
+    }
+    el.innerHTML = html;
+    el.querySelectorAll("[data-friend-act]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const act = btn.dataset.friendAct;
+        try {
+          if (act === "add") await api(`/api/friends/${userId}/request`, { method: "POST" });
+          else if (act === "cancel" || act === "remove") await api(`/api/friends/${userId}`, { method: "DELETE" });
+          else if (act === "accept") await api(`/api/friends/${userId}/accept`, { method: "POST" });
+          else if (act === "decline") await api(`/api/friends/${userId}/decline`, { method: "POST" });
+          showToast("Готово");
+          openProfile(userId);
+        } catch (err) { showToast(err.message); }
+      });
+    });
+  }
+
+  async function loadFriendRequests() {
+    try {
+      const data = await api("/api/friends/requests");
+      const card = document.getElementById("friendRequestsCard");
+      const listEl = document.getElementById("friendRequestsList");
+      if (!data.requests.length) {
+        card.style.display = "none";
+        return;
+      }
+      card.style.display = "";
+      listEl.innerHTML = data.requests.map(r => `
+        <div class="friend-req-item">
+          <div class="clickable-user" data-open-profile="${r.from.id}">${avatarHtml(r.from, "sm")}</div>
+          <div class="friend-req-name clickable-user" data-open-profile="${r.from.id}">${escapeHtml(r.from.name)}</div>
+          <div class="friend-req-actions">
+            <button class="acc" data-fr-accept="${r.from.id}">Прийняти</button>
+            <button class="dec" data-fr-decline="${r.from.id}">Відхилити</button>
+          </div>
+        </div>
+      `).join("");
+      listEl.querySelectorAll("[data-open-profile]").forEach(el => {
+        el.addEventListener("click", () => openProfile(parseInt(el.dataset.openProfile, 10)));
+      });
+      listEl.querySelectorAll("[data-fr-accept]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          try { await api(`/api/friends/${btn.dataset.frAccept}/accept`, { method: "POST" }); showToast("Тепер ви друзі"); loadFriendRequests(); }
+          catch (err) { showToast(err.message); }
+        });
+      });
+      listEl.querySelectorAll("[data-fr-decline]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          try { await api(`/api/friends/${btn.dataset.frDecline}/decline`, { method: "POST" }); loadFriendRequests(); }
+          catch (err) { showToast(err.message); }
+        });
+      });
+    } catch (err) { /* silent */ }
+  }
+
   /* ---------------- Settings modal ---------------- */
 
   const settingsModal = document.getElementById("settingsModal");
@@ -624,8 +703,46 @@
     document.getElementById("settingsBio").value = me.bio || "";
     setAvatarEl(document.getElementById("settingsAvatarPreview"), me);
     pendingAvatarDataUrl = null;
+    refreshVerifyUi();
     settingsModal.classList.add("open");
   }
+
+  function refreshVerifyUi() {
+    const badge = document.getElementById("verifyBadge");
+    const sendBtn = document.getElementById("verifySendBtn");
+    document.getElementById("verifyCodeRow").classList.remove("open");
+    document.getElementById("verifyHint").textContent = "";
+    document.getElementById("verifyCodeInput").value = "";
+    if (me.emailVerified) {
+      badge.textContent = "Підтверджено";
+      badge.className = "verify-badge yes";
+      sendBtn.style.display = "none";
+    } else {
+      badge.textContent = "Не підтверджено";
+      badge.className = "verify-badge no";
+      sendBtn.style.display = "";
+      sendBtn.textContent = "Підтвердити";
+    }
+  }
+
+  document.getElementById("verifySendBtn").addEventListener("click", async () => {
+    try {
+      const data = await api("/api/me/send-verification", { method: "POST" });
+      document.getElementById("verifyCodeRow").classList.add("open");
+      document.getElementById("verifyHint").textContent = `Демо-режим (без реальної пошти): ваш код — ${data.code}`;
+      showToast("Код підтвердження згенеровано");
+    } catch (err) { showToast(err.message); }
+  });
+  document.getElementById("verifyConfirmBtn").addEventListener("click", async () => {
+    const code = document.getElementById("verifyCodeInput").value.trim();
+    if (!code) return;
+    try {
+      const data = await api("/api/me/verify-email", { method: "POST", body: JSON.stringify({ code }) });
+      me = data.user;
+      refreshVerifyUi();
+      showToast("Email підтверджено!");
+    } catch (err) { showToast(err.message); }
+  });
   document.getElementById("settingsCancelBtn").addEventListener("click", () => settingsModal.classList.remove("open"));
   document.getElementById("changePhotoBtn").addEventListener("click", () => document.getElementById("avatarFileInput").click());
   document.getElementById("avatarFileInput").addEventListener("change", (e) => {
@@ -669,9 +786,11 @@
     const name = n.actor ? n.actor.name : "Хтось";
     if (n.type === "like") return `<b>${escapeHtml(name)}</b> вподобав(ла) ваш пост`;
     if (n.type === "comment") return `<b>${escapeHtml(name)}</b> прокоментував(ла) ваш пост`;
+    if (n.type === "friend_request") return `<b>${escapeHtml(name)}</b> надіслав(ла) запит у друзі`;
+    if (n.type === "friend_accept") return `<b>${escapeHtml(name)}</b> прийняв(ла) ваш запит у друзі`;
     return `<b>${escapeHtml(name)}</b> взаємодіяв(ла) з вашим контентом`;
   }
-  function notifIcon(n) { return n.type === "like" ? "❤️" : n.type === "comment" ? "💬" : "🔔"; }
+  function notifIcon(n) { return n.type === "like" ? "❤️" : n.type === "comment" ? "💬" : (n.type === "friend_request" || n.type === "friend_accept") ? "🤝" : "🔔"; }
 
   async function loadNotifications() {
     if (!me) return;
@@ -741,7 +860,7 @@
             <div class="user-pick-item" data-open-profile="${u.id}">
               ${avatarHtml(u, "sm")}
               <div>
-                <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-tag">✦ Founder</span>` : ""}</div>
+                <div class="conv-name">${escapeHtml(u.name)}${u.isAdmin ? `<span class="founder-crown">👑 Founder</span>` : ""}</div>
                 <div class="conv-preview">${escapeHtml(u.email)}</div>
               </div>
             </div>
