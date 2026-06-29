@@ -16,6 +16,7 @@ db.exec(`
     salt TEXT NOT NULL,
     avatar_color TEXT NOT NULL,
     bio TEXT DEFAULT '',
+    is_admin INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   );
 
@@ -49,5 +50,12 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 `);
+
+// Migration for databases created before is_admin existed
+try {
+  db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
+} catch (e) {
+  // column already exists, ignore
+}
 
 module.exports = db;
