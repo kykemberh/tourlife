@@ -259,9 +259,11 @@
     }
     .bottom-nav button{
       flex:1; border:none; background:transparent; padding:8px 2px; font-size:20px; color:var(--muted); cursor:pointer; position:relative;
+      display:flex; align-items:center; justify-content:center;
     }
+    .bottom-nav button svg{ width:23px; height:23px; display:block; }
     .bottom-nav button.active{ color:var(--purple); }
-    .bottom-nav .bn-dot{ position:absolute; top:4px; right:22%; width:7px; height:7px; background:#ef4444; border-radius:50%; display:none; }
+    .bottom-nav .bn-dot{ position:absolute; top:4px; right:28%; width:7px; height:7px; background:#ef4444; border-radius:50%; display:none; }
     .bottom-nav .bn-dot.show{ display:block; }
     /* when bottom nav is visible we hide the messages chat list once a chat is open, for a full-screen feel */
     .messages-layout.chat-open .conv-list{ display:none; }
@@ -464,10 +466,19 @@
   </main>
 
   <div class="bottom-nav" id="bottomNav">
-    <button class="bn-tab" data-tab="feed" title="Стрічка">🏠</button>
-    <button class="bn-tab" data-tab="notifications" title="Сповіщення">🔔<span class="bn-dot" id="bnDot"></span></button>
-    <button class="bn-tab" data-tab="messages" title="Повідомлення">💬</button>
-    <button class="bn-tab" data-tab="overview" title="Профіль">👤</button>
+    <button class="bn-tab" data-tab="feed" title="Стрічка">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>
+    </button>
+    <button class="bn-tab" data-tab="notifications" title="Сповіщення">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 3.5-1 5.5-2 7h16c-1-1.5-2-3.5-2-7Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+      <span class="bn-dot" id="bnDot"></span>
+    </button>
+    <button class="bn-tab" data-tab="messages" title="Повідомлення">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+    </button>
+    <button class="bn-tab" data-tab="overview" title="Профіль">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"/></svg>
+    </button>
   </div>
 </div>
 
