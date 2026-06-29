@@ -91,6 +91,7 @@
   .post-dropdown{ position:absolute; top:calc(100% + 6px); right:0; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,.12); min-width:180px; padding:6px; display:none; z-index:35; }
   .post-dropdown.open{ display:block; }
   .post-text{ margin:14px 0 16px; font-size:15px; line-height:1.55; white-space:pre-wrap; }
+  .post-image{ display:block; max-width:100%; max-height:520px; border-radius:12px; margin:14px 0 16px; object-fit:cover; }
   .post-actions{ display:flex; gap:28px; color:var(--muted); font-size:14px; }
   .post-actions .action{ display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
   .post-actions .action:hover{ color:var(--purple); }
@@ -140,6 +141,104 @@
   .chat-send:hover{ background:var(--purple); }
   .user-pick-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; }
   .user-pick-item:hover{ background:var(--bg); }
+
+  /* ---------- search ---------- */
+  .header-search{ position:relative; flex:0 1 240px; }
+  .header-search input{ width:100%; border:1px solid var(--border); background:var(--bg); border-radius:20px; padding:8px 14px; font-size:13.5px; outline:none; font-family:inherit; }
+  .header-search input:focus{ border-color:var(--purple-light); background:#fff; }
+  .search-results{ position:absolute; top:calc(100% + 8px); left:0; right:0; background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 28px rgba(0,0,0,.12); max-height:340px; overflow-y:auto; display:none; z-index:40; }
+  .search-results.open{ display:block; }
+
+  /* ---------- clickable user ---------- */
+  .clickable-user{ cursor:pointer; }
+  .clickable-user:hover .post-name, .clickable-user:hover .conv-name{ text-decoration:underline; }
+
+  /* ---------- avatar image variant ---------- */
+  .avatar img{ width:100%; height:100%; object-fit:cover; border-radius:50%; }
+
+  /* ---------- modal ---------- */
+  .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:90; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:#fff; border-radius:16px; padding:26px; width:380px; max-width:92vw; }
+  .modal-title{ font-weight:800; font-size:17px; margin-bottom:16px; }
+  .modal-box label{ font-size:13px; font-weight:600; color:var(--muted); display:block; margin:12px 0 6px; }
+  .modal-box input[type=text], .modal-box textarea{ width:100%; border:1px solid var(--border); border-radius:10px; padding:10px 13px; font-size:14px; font-family:inherit; outline:none; resize:none; }
+  .modal-box input[type=text]:focus, .modal-box textarea:focus{ border-color:var(--purple-light); }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+  .modal-cancel{ background:var(--bg); border:none; padding:10px 18px; border-radius:10px; font-weight:600; cursor:pointer; color:var(--muted); }
+  .modal-save{ background:var(--purple-light); color:#fff; border:none; padding:10px 18px; border-radius:10px; font-weight:700; cursor:pointer; }
+  .modal-save:hover{ background:var(--purple); }
+  .settings-avatar-row{ display:flex; align-items:center; gap:14px; margin-top:6px; }
+  .settings-avatar-row .avatar{ width:64px; height:64px; font-size:20px; }
+  .change-photo-btn{ background:var(--purple-bg); color:var(--purple); border:none; padding:7px 14px; border-radius:8px; font-weight:600; font-size:13px; cursor:pointer; }
+
+  /* ---------- view-once chat photo ---------- */
+  .msg-image{ display:block; max-width:220px; max-height:260px; border-radius:12px; margin-top:4px; object-fit:cover; cursor:pointer; }
+  .msg-bubble.image-bubble{ padding:6px; background:transparent !important; }
+  .view-once-tag{ font-size:11px; opacity:.85; margin-top:2px; display:flex; align-items:center; gap:4px; }
+  .view-once-gone{ display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:14px; background:var(--bg); color:var(--muted); font-size:13px; font-style:italic; }
+  .chat-icons{ display:flex; align-items:center; gap:8px; }
+  .chat-icons span{ cursor:pointer; font-size:18px; color:var(--muted); padding:4px; }
+  .chat-icons span:hover{ color:var(--purple); }
+  .chat-icons span.active{ color:var(--purple); }
+  .chat-search-row{ padding:8px 8px 0; }
+  .chat-search-row input{ width:100%; border:1px solid var(--border); border-radius:10px; padding:7px 12px; font-size:12.5px; outline:none; font-family:inherit; background:var(--bg); }
+  .pending-image-preview{ display:flex; align-items:center; gap:8px; padding:0 14px 8px; }
+  .pending-image-preview img{ width:44px; height:44px; object-fit:cover; border-radius:8px; }
+
+  /* ---------- notifications real ---------- */
+  .notif-item.clickable{ cursor:pointer; }
+  .notif-item .nf-icon{ margin-right:4px; }
+  .notif-list-empty{ padding:14px; color:var(--muted); font-size:13px; }
+
+  /* ---------- profile view ---------- */
+  .profile-bio{ margin-top:10px; font-size:14px; color:var(--text); white-space:pre-wrap; }
+  .back-link{ color:var(--purple); font-weight:600; font-size:13.5px; cursor:pointer; margin-bottom:12px; display:inline-block; }
+
+  /* ---------- "alive" animations ---------- */
+  @keyframes fadeInUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+  .card{ animation:fadeInUp .28s ease both; transition:box-shadow .2s, transform .15s; }
+  .card:hover{ box-shadow:0 6px 20px rgba(124,58,237,.08); }
+  @keyframes likePulse{ 0%{ transform:scale(1); } 35%{ transform:scale(1.35); } 60%{ transform:scale(0.92); } 100%{ transform:scale(1); } }
+  .action.liked span:first-child{ display:inline-block; animation:likePulse .35s ease; }
+  .avatar, .publish-btn, nav button, .tab, .conv-item, .dropdown-item, .post-menu, .bell{ transition:background .15s, color .15s, transform .15s; }
+  nav button:active, .publish-btn:active{ transform:scale(.96); }
+  .skeleton{ background:linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%); background-size:400% 100%; animation:skeleton-loading 1.4s ease infinite; border-radius:8px; }
+  @keyframes skeleton-loading{ 0%{ background-position:100% 50%; } 100%{ background-position:0 50%; } }
+
+  /* ---------- mobile / responsive ---------- */
+  .bottom-nav{ display:none; }
+  @media (max-width: 860px){
+    header{ padding:10px 14px; gap:12px; flex-wrap:wrap; }
+    header nav{ display:none; }
+    .header-search{ order:3; flex:1 1 100%; }
+    main{ margin:14px auto 80px; padding:0 10px 64px; }
+    .card{ padding:16px; border-radius:14px; }
+    .messages-layout{ flex-direction:column; min-height:70vh; border-radius:12px; }
+    .conv-list{ width:100%; border-right:none; border-bottom:1px solid var(--border); max-height:220px; }
+    .chat-area{ min-height:50vh; }
+    .chat-messages{ max-height:unset; }
+    .msg-bubble{ max-width:84%; }
+    .modal-box{ width:94vw; }
+    .bottom-nav{
+      display:flex; position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--border);
+      z-index:50; padding:6px 4px env(safe-area-inset-bottom, 6px);
+    }
+    .bottom-nav button{
+      flex:1; border:none; background:transparent; padding:8px 2px; font-size:20px; color:var(--muted); cursor:pointer; position:relative;
+    }
+    .bottom-nav button.active{ color:var(--purple); }
+    .bottom-nav .bn-dot{ position:absolute; top:4px; right:22%; width:7px; height:7px; background:#ef4444; border-radius:50%; display:none; }
+    .bottom-nav .bn-dot.show{ display:block; }
+    /* when bottom nav is visible we hide the messages chat list once a chat is open, for a full-screen feel */
+    .messages-layout.chat-open .conv-list{ display:none; }
+    .messages-layout.chat-open .chat-area{ min-height:78vh; }
+    .chat-back-btn{ display:inline-block !important; }
+  }
+  .chat-back-btn{ display:none; cursor:pointer; font-size:18px; margin-right:4px; }
+  @media (min-width: 861px){
+    .header-search{ order:0; }
+  }
 </style>
 </head>
 <body>
@@ -177,12 +276,16 @@
       <button class="tab" data-tab="messages">Повідомлення</button>
       <button class="tab" data-tab="admin" id="adminTabBtn" style="display:none;">🛠 Адмін</button>
     </nav>
+    <div class="header-search">
+      <input type="text" id="userSearchInput" placeholder="Пошук людей на TourLife...">
+      <div class="search-results" id="searchResults"></div>
+    </div>
     <div class="header-right">
       <div class="dropdown-wrap">
         <div class="bell" id="bellBtn">🔔<span class="dot hidden" id="bellDot"></span></div>
         <div class="dropdown" id="bellDropdown">
           <div class="dropdown-title">Сповіщення</div>
-          <div class="notif-item">Тут з'являтимуться лайки, коментарі та підписки.</div>
+          <div id="bellNotifList" class="notif-list-empty">Завантаження...</div>
         </div>
       </div>
       <div class="dropdown-wrap">
@@ -227,6 +330,7 @@
           <div class="post-author">
             <span class="post-name" id="overviewName" style="font-size:18px;"></span>
             <div class="post-time" id="overviewEmail"></div>
+            <div class="profile-bio" id="overviewBio"></div>
           </div>
         </div>
         <div class="stat-row">
@@ -235,22 +339,40 @@
       </div>
     </div>
 
+    <div id="view-profile" class="view">
+      <span class="back-link" id="profileBackLink">← Назад до стрічки</span>
+      <div class="card">
+        <div class="post-header">
+          <div class="avatar" id="profileAvatar" style="width:64px;height:64px;font-size:20px;"></div>
+          <div class="post-author">
+            <span class="post-name" id="profileName" style="font-size:18px;"></span>
+            <div class="post-time" id="profileMeta"></div>
+            <div class="profile-bio" id="profileBio"></div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><div class="num" id="profilePostCount">0</div><div class="lbl">Пости</div></div>
+        </div>
+      </div>
+      <div id="profilePosts"></div>
+    </div>
+
     <div id="view-notifications" class="view">
       <div class="card">
         <div class="dropdown-title" style="padding-left:0;">Усі сповіщення</div>
-        <div class="placeholder-card">
-          <div class="big">🔔</div>
-          Сповіщення про лайки, коментарі та підписки з'являться тут.
-        </div>
+        <div id="fullNotifList"><div class="placeholder-card"><div class="big">🔔</div>Сповіщення про лайки, коментарі та підписки з'являться тут.</div></div>
       </div>
     </div>
 
     <div id="view-messages" class="view">
-      <div class="messages-layout">
+      <div class="messages-layout" id="messagesLayout">
         <div class="conv-list">
           <div class="conv-list-header">
             <div class="dropdown-title" style="padding:0;">Чати</div>
             <button class="new-msg-btn" id="newMsgBtn">+ Нове</button>
+          </div>
+          <div class="chat-search-row">
+            <input type="text" id="convSearchInput" placeholder="🔍 Пошук чатів...">
           </div>
           <div id="convList"></div>
         </div>
@@ -261,14 +383,25 @@
           </div>
           <div id="chatActive" style="display:none; flex:1; display:flex; flex-direction:column;">
             <div class="chat-header">
+              <span class="chat-back-btn" id="chatBackBtn">←</span>
               <div class="avatar sm" id="chatAvatar"></div>
               <span id="chatName"></span>
             </div>
             <div class="chat-messages" id="chatMessages"></div>
+            <div id="pendingImagePreview" class="pending-image-preview" style="display:none;">
+              <img id="pendingImagePreviewImg" src="">
+              <span id="pendingImageLabel" style="font-size:12.5px; color:var(--muted);"></span>
+              <span class="x" id="pendingImageClear" style="cursor:pointer; font-weight:800; color:var(--muted);">✕</span>
+            </div>
             <div class="chat-input-row">
+              <div class="chat-icons">
+                <span title="Фото/Відео" id="chatPhotoBtn">📷</span>
+                <span title="Перегляд один раз" id="chatViewOnceBtn">🔥</span>
+              </div>
               <input type="text" id="chatInput" placeholder="Написати повідомлення...">
               <button class="chat-send" id="chatSendBtn">➤</button>
             </div>
+            <input type="file" id="chatFileInput" accept="image/*" style="display:none">
           </div>
         </div>
       </div>
@@ -289,6 +422,32 @@
       </div>
     </div>
   </main>
+
+  <div class="bottom-nav" id="bottomNav">
+    <button class="bn-tab" data-tab="feed" title="Стрічка">🏠</button>
+    <button class="bn-tab" data-tab="notifications" title="Сповіщення">🔔<span class="bn-dot" id="bnDot"></span></button>
+    <button class="bn-tab" data-tab="messages" title="Повідомлення">💬</button>
+    <button class="bn-tab" data-tab="overview" title="Профіль">👤</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <div class="modal-title">⚙️ Налаштування профілю</div>
+    <div class="settings-avatar-row">
+      <div class="avatar" id="settingsAvatarPreview" style="width:64px;height:64px;font-size:20px;"></div>
+      <button class="change-photo-btn" id="changePhotoBtn" type="button">Змінити фото</button>
+      <input type="file" id="avatarFileInput" accept="image/*" style="display:none">
+    </div>
+    <label for="settingsName">Ім'я</label>
+    <input type="text" id="settingsName" maxlength="60">
+    <label for="settingsBio">Про себе</label>
+    <textarea id="settingsBio" rows="3" maxlength="280"></textarea>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="settingsCancelBtn" type="button">Скасувати</button>
+      <button class="modal-save" id="settingsSaveBtn" type="button">Зберегти</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
