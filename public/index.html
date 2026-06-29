@@ -175,6 +175,7 @@
       <button class="tab" data-tab="overview">Огляд</button>
       <button class="tab" data-tab="notifications">Сповіщення</button>
       <button class="tab" data-tab="messages">Повідомлення</button>
+      <button class="tab" data-tab="admin" id="adminTabBtn" style="display:none;">🛠 Адмін</button>
     </nav>
     <div class="header-right">
       <div class="dropdown-wrap">
@@ -270,6 +271,21 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+    <div id="view-admin" class="view">
+      <div class="card">
+        <div class="dropdown-title" style="padding-left:0;">Статистика сайту</div>
+        <div class="stat-row">
+          <div class="stat"><div class="num" id="adminUserCount">0</div><div class="lbl">Користувачі</div></div>
+          <div class="stat"><div class="num" id="adminPostCount">0</div><div class="lbl">Пости</div></div>
+          <div class="stat"><div class="num" id="adminCommentCount">0</div><div class="lbl">Коментарі</div></div>
+          <div class="stat"><div class="num" id="adminMessageCount">0</div><div class="lbl">Повідомлення</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="dropdown-title" style="padding-left:0;">Користувачі</div>
+        <div id="adminUserList"></div>
       </div>
     </div>
   </main>
