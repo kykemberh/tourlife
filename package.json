@@ -1,0 +1,13 @@
+{
+  "name": "tourlife-app",
+  "version": "1.0.0",
+  "description": "TourLife - travel social network",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

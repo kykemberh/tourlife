@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TourLife</title>
+<style>
+  :root{
+    --purple:#7c3aed; --purple-light:#a78bfa; --purple-bg:#ede9fe;
+    --bg:#f5f5f7; --card-bg:#ffffff; --border:#e5e7eb;
+    --text:#1f2937; --muted:#6b7280; --heart:#ef4444;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  /* ---------- Auth screen ---------- */
+  #auth-screen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:24px;
+  }
+  .auth-logo{ font-size:34px; font-weight:800; color:var(--purple); }
+  .auth-card{
+    background:#fff; border:1px solid var(--border); border-radius:16px; padding:32px; width:360px;
+  }
+  .auth-tabs{ display:flex; gap:8px; margin-bottom:20px; }
+  .auth-tabs button{
+    flex:1; border:none; background:var(--bg); padding:10px; border-radius:10px; font-weight:600; color:var(--muted); cursor:pointer;
+  }
+  .auth-tabs button.active{ background:var(--purple-bg); color:var(--purple); }
+  .auth-card input{
+    width:100%; border:1px solid var(--border); border-radius:10px; padding:11px 14px; font-size:14px; margin-bottom:12px; outline:none; font-family:inherit;
+  }
+  .auth-card input:focus{ border-color:var(--purple-light); }
+  .auth-submit{
+    width:100%; background:var(--purple-light); color:#fff; border:none; padding:12px; border-radius:10px; font-weight:700; font-size:15px; cursor:pointer;
+  }
+  .auth-submit:hover{ background:var(--purple); }
+  .auth-error{ color:#ef4444; font-size:13px; margin:-4px 0 12px; min-height:16px; }
+  .auth-form{ display:none; }
+  .auth-form.active{ display:block; }
+
+  header{ background:#fff; border-bottom:1px solid var(--border); padding:14px 32px; display:flex; align-items:center; gap:32px; position:sticky; top:0; z-index:30; }
+  .logo{ font-size:24px; font-weight:800; color:var(--purple); margin-right:8px; cursor:pointer; user-select:none; }
+  nav{ display:flex; gap:8px; flex:1; }
+  nav button{ border:none; background:transparent; padding:10px 18px; border-radius:10px; font-size:15px; font-weight:600; color:var(--muted); cursor:pointer; transition:background .15s, color .15s; }
+  nav button.active{ background:var(--purple-bg); color:var(--purple); }
+  nav button:hover{ background:#f3f4f6; }
+  nav button.active:hover{ background:var(--purple-bg); }
+  .header-right{ display:flex; align-items:center; gap:18px; position:relative; }
+  .bell{ font-size:20px; cursor:pointer; position:relative; }
+  .bell .dot{ position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#ef4444; border-radius:50%; }
+  .bell .dot.hidden{ display:none; }
+  .avatar{ width:38px; height:38px; border-radius:50%; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; cursor:pointer; flex-shrink:0; }
+  .avatar.sm{ width:32px; height:32px; font-size:12px; }
+  .dropdown-wrap{ position:relative; }
+  .dropdown{ position:absolute; top:calc(100% + 10px); right:0; background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 28px rgba(0,0,0,.12); min-width:240px; padding:8px; display:none; z-index:40; }
+  .dropdown.open{ display:block; }
+  .dropdown-title{ font-weight:700; font-size:14px; padding:8px 10px 4px; }
+  .dropdown-item{ padding:10px 12px; border-radius:10px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:10px; }
+  .dropdown-item:hover{ background:var(--bg); }
+  .dropdown-item.danger{ color:#ef4444; }
+  .notif-item{ padding:10px 12px; border-radius:10px; font-size:13px; cursor:default; line-height:1.4; }
+  .notif-item:hover{ background:var(--bg); }
+  .notif-item b{ font-weight:700; }
+  .notif-time{ color:var(--muted); font-size:12px; margin-top:2px; }
+  main{ max-width:760px; margin:24px auto; padding:0 16px 64px; }
+  .card{ background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:20px 24px; margin-bottom:18px; }
+  .composer-top{ display:flex; gap:14px; }
+  .composer-top textarea{ flex:1; border:1px solid var(--border); border-radius:12px; padding:14px 16px; font-size:15px; font-family:inherit; resize:none; min-height:48px; outline:none; }
+  .composer-top textarea:focus{ border-color:var(--purple-light); }
+  .composer-bottom{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; position:relative; }
+  .composer-icons{ display:flex; gap:18px; font-size:18px; color:var(--muted); }
+  .composer-icons span{ cursor:pointer; }
+  .composer-icons span:hover{ color:var(--purple); }
+  .publish-btn{ background:var(--purple-light); color:#fff; border:none; padding:10px 22px; border-radius:10px; font-weight:600; font-size:15px; cursor:pointer; transition:background .15s; }
+  .publish-btn:hover{ background:var(--purple); }
+  .publish-btn:disabled{ background:#d1d5db; cursor:not-allowed; }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .chip{ background:var(--purple-bg); color:var(--purple); font-size:13px; font-weight:600; padding:6px 10px; border-radius:8px; display:flex; align-items:center; gap:6px; }
+  .chip .x{ cursor:pointer; font-weight:800; }
+  .emoji-picker{ position:absolute; bottom:calc(100% + 8px); left:0; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,.12); padding:10px; display:none; gap:6px; grid-template-columns:repeat(6,1fr); z-index:40; }
+  .emoji-picker.open{ display:grid; }
+  .emoji-picker span{ font-size:20px; cursor:pointer; padding:4px; border-radius:8px; text-align:center; }
+  .emoji-picker span:hover{ background:var(--bg); }
+  .post-header{ display:flex; gap:14px; align-items:flex-start; }
+  .post-author{ flex:1; }
+  .post-name{ font-weight:700; font-size:15px; }
+  .founder-tag{ color:var(--purple); font-weight:600; font-size:13px; margin-left:4px; }
+  .post-time{ color:var(--muted); font-size:13px; }
+  .post-menu-wrap{ position:relative; }
+  .post-menu{ color:var(--muted); cursor:pointer; font-size:18px; padding:2px 8px; border-radius:8px; }
+  .post-menu:hover{ background:var(--bg); }
+  .post-dropdown{ position:absolute; top:calc(100% + 6px); right:0; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,.12); min-width:180px; padding:6px; display:none; z-index:35; }
+  .post-dropdown.open{ display:block; }
+  .post-text{ margin:14px 0 16px; font-size:15px; line-height:1.55; white-space:pre-wrap; }
+  .post-actions{ display:flex; gap:28px; color:var(--muted); font-size:14px; }
+  .post-actions .action{ display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+  .post-actions .action:hover{ color:var(--purple); }
+  .action.liked{ color:var(--heart); }
+  .action.liked:hover{ color:var(--heart); }
+  .comments-section{ margin-top:16px; padding-top:14px; border-top:1px solid var(--border); display:none; }
+  .comments-section.open{ display:block; }
+  .comment-item{ display:flex; gap:10px; margin-bottom:12px; }
+  .comment-bubble{ background:var(--bg); border-radius:12px; padding:8px 12px; font-size:13.5px; flex:1; }
+  .comment-author{ font-weight:700; margin-right:6px; }
+  .comment-time{ color:var(--muted); font-size:11px; margin-top:3px; }
+  .comment-empty{ color:var(--muted); font-size:13px; margin-bottom:10px; }
+  .comment-input-row{ display:flex; gap:10px; align-items:center; }
+  .comment-input-row input{ flex:1; border:1px solid var(--border); border-radius:20px; padding:9px 16px; font-size:13.5px; outline:none; font-family:inherit; }
+  .comment-input-row input:focus{ border-color:var(--purple-light); }
+  .comment-send{ background:var(--purple-light); color:#fff; border:none; border-radius:50%; width:34px; height:34px; cursor:pointer; font-size:14px; }
+  .comment-send:hover{ background:var(--purple); }
+  .placeholder-card{ text-align:center; color:var(--muted); padding:48px 24px; }
+  .placeholder-card .big{ font-size:40px; margin-bottom:10px; }
+  .conv-item{ display:flex; gap:12px; align-items:center; padding:12px; border-radius:12px; cursor:pointer; }
+  .conv-item:hover, .conv-item.active{ background:var(--bg); }
+  .conv-name{ font-weight:700; font-size:14px; }
+  .conv-preview{ color:var(--muted); font-size:13px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stat-row{ display:flex; gap:24px; margin-top:16px; }
+  .stat{ text-align:center; }
+  .stat .num{ font-size:20px; font-weight:800; color:var(--purple); }
+  .stat .lbl{ font-size:12px; color:var(--muted); }
+  .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px); background:#1f2937; color:#fff; padding:12px 22px; border-radius:10px; font-size:14px; opacity:0; transition:opacity .2s, transform .2s; z-index:100; pointer-events:none; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .messages-layout{ display:flex; gap:0; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:#fff; min-height:480px; }
+  .conv-list{ width:280px; border-right:1px solid var(--border); padding:8px; overflow-y:auto; }
+  .conv-list-header{ display:flex; justify-content:space-between; align-items:center; padding:10px 8px; }
+  .new-msg-btn{ background:var(--purple-bg); color:var(--purple); border:none; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+  .chat-area{ flex:1; display:flex; flex-direction:column; }
+  .chat-header{ padding:14px 18px; border-bottom:1px solid var(--border); font-weight:700; display:flex; align-items:center; gap:10px; }
+  .chat-messages{ flex:1; padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; max-height:400px; }
+  .msg-bubble{ max-width:70%; padding:9px 14px; border-radius:14px; font-size:14px; line-height:1.4; }
+  .msg-bubble.mine{ background:var(--purple-light); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+  .msg-bubble.theirs{ background:var(--bg); align-self:flex-start; border-bottom-left-radius:4px; }
+  .chat-input-row{ display:flex; gap:10px; padding:14px; border-top:1px solid var(--border); }
+  .chat-input-row input{ flex:1; border:1px solid var(--border); border-radius:20px; padding:10px 16px; font-size:14px; outline:none; font-family:inherit; }
+  .chat-input-row input:focus{ border-color:var(--purple-light); }
+  .chat-send{ background:var(--purple-light); color:#fff; border:none; border-radius:50%; width:38px; height:38px; cursor:pointer; }
+  .chat-send:hover{ background:var(--purple); }
+  .user-pick-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; }
+  .user-pick-item:hover{ background:var(--bg); }
+</style>
+</head>
+<body>
+
+<div id="auth-screen">
+  <div class="auth-logo">TourLife</div>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button id="tabLogin" class="active">Увійти</button>
+      <button id="tabRegister">Реєстрація</button>
+    </div>
+    <form id="loginForm" class="auth-form active">
+      <input type="email" id="loginEmail" placeholder="Email" required>
+      <input type="password" id="loginPassword" placeholder="Пароль" required>
+      <div class="auth-error" id="loginError"></div>
+      <button type="submit" class="auth-submit">Увійти</button>
+    </form>
+    <form id="registerForm" class="auth-form">
+      <input type="text" id="regName" placeholder="Ім'я та прізвище" required>
+      <input type="email" id="regEmail" placeholder="Email" required>
+      <input type="password" id="regPassword" placeholder="Пароль (мінімум 6 символів)" required>
+      <div class="auth-error" id="regError"></div>
+      <button type="submit" class="auth-submit">Створити акаунт</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-root" style="display:none;">
+  <header>
+    <div class="logo" id="logoBtn">TourLife</div>
+    <nav>
+      <button class="tab active" data-tab="feed">Стрічка</button>
+      <button class="tab" data-tab="overview">Огляд</button>
+      <button class="tab" data-tab="notifications">Сповіщення</button>
+      <button class="tab" data-tab="messages">Повідомлення</button>
+    </nav>
+    <div class="header-right">
+      <div class="dropdown-wrap">
+        <div class="bell" id="bellBtn">🔔<span class="dot hidden" id="bellDot"></span></div>
+        <div class="dropdown" id="bellDropdown">
+          <div class="dropdown-title">Сповіщення</div>
+          <div class="notif-item">Тут з'являтимуться лайки, коментарі та підписки.</div>
+        </div>
+      </div>
+      <div class="dropdown-wrap">
+        <div class="avatar" id="avatarBtn"></div>
+        <div class="dropdown" id="avatarDropdown">
+          <div class="dropdown-item" data-action="profile">👤 Профіль</div>
+          <div class="dropdown-item" data-action="settings">⚙️ Налаштування</div>
+          <div class="dropdown-item danger" data-action="logout">🚪 Вийти</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="view-feed" class="view active">
+      <div class="card">
+        <div class="composer-top">
+          <div class="avatar" id="composerAvatar"></div>
+          <textarea id="postInput" placeholder="Що у вас на думці?" rows="1"></textarea>
+        </div>
+        <div id="chips" class="chips"></div>
+        <div class="composer-bottom">
+          <div class="composer-icons">
+            <span title="Фото" id="photoBtn">📷</span>
+            <span title="Відео" id="videoBtn">🎥</span>
+            <span title="Емоція" id="emojiBtn">😊
+              <div class="emoji-picker" id="emojiPicker"></div>
+            </span>
+            <span title="Місце" id="locationBtn">📍</span>
+          </div>
+          <button class="publish-btn" id="publishBtn" disabled>Опублікувати</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*,video/*" style="display:none">
+      </div>
+      <div id="feed"></div>
+    </div>
+
+    <div id="view-overview" class="view">
+      <div class="card">
+        <div class="post-header">
+          <div class="avatar" id="overviewAvatar" style="width:64px;height:64px;font-size:20px;"></div>
+          <div class="post-author">
+            <span class="post-name" id="overviewName" style="font-size:18px;"></span>
+            <div class="post-time" id="overviewEmail"></div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><div class="num" id="overviewPostCount">0</div><div class="lbl">Пости</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-notifications" class="view">
+      <div class="card">
+        <div class="dropdown-title" style="padding-left:0;">Усі сповіщення</div>
+        <div class="placeholder-card">
+          <div class="big">🔔</div>
+          Сповіщення про лайки, коментарі та підписки з'являться тут.
+        </div>
+      </div>
+    </div>
+
+    <div id="view-messages" class="view">
+      <div class="messages-layout">
+        <div class="conv-list">
+          <div class="conv-list-header">
+            <div class="dropdown-title" style="padding:0;">Чати</div>
+            <button class="new-msg-btn" id="newMsgBtn">+ Нове</button>
+          </div>
+          <div id="convList"></div>
+        </div>
+        <div class="chat-area">
+          <div id="chatPlaceholder" class="placeholder-card" style="margin:auto;">
+            <div class="big">💬</div>
+            Виберіть розмову, щоб почати спілкування
+          </div>
+          <div id="chatActive" style="display:none; flex:1; display:flex; flex-direction:column;">
+            <div class="chat-header">
+              <div class="avatar sm" id="chatAvatar"></div>
+              <span id="chatName"></span>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-row">
+              <input type="text" id="chatInput" placeholder="Написати повідомлення...">
+              <button class="chat-send" id="chatSendBtn">➤</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
