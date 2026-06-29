@@ -57,8 +57,19 @@ function publicUser(row) {
     email: row.email,
     avatarColor: row.avatar_color,
     bio: row.bio || "",
+    isAdmin: !!row.is_admin,
     createdAt: row.created_at
   };
+}
+
+// If a user's email matches ADMIN_EMAIL, make sure they're flagged as admin.
+function syncAdminFlag(user) {
+  const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  if (adminEmail && user.email === adminEmail && !user.is_admin) {
+    db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(user.id);
+    return db.prepare("SELECT * FROM users WHERE id = ?").get(user.id);
+  }
+  return user;
 }
 
 function initials(name) {
@@ -94,7 +105,7 @@ function postWithMeta(row, meId) {
     likeCount,
     likedByMe,
     commentCount,
-    author: author ? { id: author.id, name: author.name, avatarColor: author.avatar_color, initials: initials(author.name) } : null
+    author: author ? { id: author.id, name: author.name, avatarColor: author.avatar_color, initials: initials(author.name), isAdmin: !!author.is_admin } : null
   };
 }
 
@@ -121,6 +132,13 @@ function requireAuth(handler) {
     if (!user) return sendJson(res, 401, { error: "Не авторизовано" });
     return handler(req, res, params, user);
   };
+}
+
+function requireAdmin(handler) {
+  return requireAuth(async (req, res, params, me) => {
+    if (!me.is_admin) return sendJson(res, 403, { error: "Доступно лише адміністратору" });
+    return handler(req, res, params, me);
+  });
 }
 
 /* ---------------- AUTH ---------------- */
@@ -150,7 +168,8 @@ route("POST", "/api/register", async (req, res) => {
     .run(name, email, hash, salt, avatarColor, now);
   const userId = result.lastInsertRowid;
   const token = makeToken(userId);
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+  let user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+  user = syncAdminFlag(user);
   sendJson(res, 201, { token, user: publicUser(user) });
 });
 
@@ -158,16 +177,59 @@ route("POST", "/api/login", async (req, res) => {
   const body = await readBody(req);
   const email = (body.email || "").trim().toLowerCase();
   const password = body.password || "";
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user || !verifyPassword(password, user.salt, user.password_hash)) {
     return sendJson(res, 401, { error: "Неправильний email або пароль" });
   }
+  user = syncAdminFlag(user);
   const token = makeToken(user.id);
   sendJson(res, 200, { token, user: publicUser(user) });
 });
 
 route("GET", "/api/me", requireAuth(async (req, res, params, me) => {
   sendJson(res, 200, { user: publicUser(me) });
+}));
+
+/* ---------------- ADMIN ---------------- */
+
+route("GET", "/api/admin/stats", requireAdmin(async (req, res, params, me) => {
+  const userCount = db.prepare("SELECT COUNT(*) AS c FROM users").get().c;
+  const postCount = db.prepare("SELECT COUNT(*) AS c FROM posts").get().c;
+  const commentCount = db.prepare("SELECT COUNT(*) AS c FROM comments").get().c;
+  const messageCount = db.prepare("SELECT COUNT(*) AS c FROM messages").get().c;
+  sendJson(res, 200, { stats: { userCount, postCount, commentCount, messageCount } });
+}));
+
+route("GET", "/api/admin/users", requireAdmin(async (req, res, params, me) => {
+  const rows = db.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
+  sendJson(res, 200, { users: rows.map(publicUser) });
+}));
+
+route("DELETE", "/api/admin/posts/:id", requireAdmin(async (req, res, params, me) => {
+  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(params.id);
+  if (!post) return sendJson(res, 404, { error: "Пост не знайдено" });
+  db.prepare("DELETE FROM posts WHERE id = ?").run(params.id);
+  db.prepare("DELETE FROM likes WHERE post_id = ?").run(params.id);
+  db.prepare("DELETE FROM comments WHERE post_id = ?").run(params.id);
+  sendJson(res, 200, { ok: true });
+}));
+
+route("DELETE", "/api/admin/users/:id", requireAdmin(async (req, res, params, me) => {
+  const targetId = parseInt(params.id, 10);
+  if (targetId === me.id) return sendJson(res, 400, { error: "Не можна видалити власний акаунт" });
+  const target = db.prepare("SELECT * FROM users WHERE id = ?").get(targetId);
+  if (!target) return sendJson(res, 404, { error: "Користувача не знайдено" });
+  const postIds = db.prepare("SELECT id FROM posts WHERE user_id = ?").all(targetId).map(p => p.id);
+  for (const pid of postIds) {
+    db.prepare("DELETE FROM likes WHERE post_id = ?").run(pid);
+    db.prepare("DELETE FROM comments WHERE post_id = ?").run(pid);
+  }
+  db.prepare("DELETE FROM posts WHERE user_id = ?").run(targetId);
+  db.prepare("DELETE FROM comments WHERE user_id = ?").run(targetId);
+  db.prepare("DELETE FROM likes WHERE user_id = ?").run(targetId);
+  db.prepare("DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?").run(targetId, targetId);
+  db.prepare("DELETE FROM users WHERE id = ?").run(targetId);
+  sendJson(res, 200, { ok: true });
 }));
 
 /* ---------------- POSTS ---------------- */
@@ -190,7 +252,7 @@ route("POST", "/api/posts", requireAuth(async (req, res, params, me) => {
 route("DELETE", "/api/posts/:id", requireAuth(async (req, res, params, me) => {
   const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(params.id);
   if (!post) return sendJson(res, 404, { error: "Пост не знайдено" });
-  if (post.user_id !== me.id) return sendJson(res, 403, { error: "Можна видаляти лише свої пости" });
+  if (post.user_id !== me.id && !me.is_admin) return sendJson(res, 403, { error: "Можна видаляти лише свої пости" });
   db.prepare("DELETE FROM posts WHERE id = ?").run(params.id);
   db.prepare("DELETE FROM likes WHERE post_id = ?").run(params.id);
   db.prepare("DELETE FROM comments WHERE post_id = ?").run(params.id);
