@@ -6,9 +6,9 @@
 <title>TourLife</title>
 <style>
   :root{
-    --purple:#7c3aed; --purple-light:#a78bfa; --purple-bg:#ede9fe;
-    --bg:#f5f5f7; --card-bg:#ffffff; --border:#e5e7eb;
-    --text:#1f2937; --muted:#6b7280; --heart:#ef4444;
+    --purple:#8b5cf6; --purple-light:#a78bfa; --purple-bg:rgba(139,92,246,.22);
+    --bg:#0c0c14; --card-bg:#15151f; --border:#27273a;
+    --text:#f1f1f6; --muted:#8c8ca3; --heart:#f43f5e;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
@@ -18,7 +18,7 @@
   }
   .auth-logo{ font-size:34px; font-weight:800; color:var(--purple); }
   .auth-card{
-    background:#fff; border:1px solid var(--border); border-radius:16px; padding:32px; width:360px;
+    background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:32px; width:360px; box-shadow:0 20px 50px rgba(0,0,0,.4);
   }
   .auth-tabs{ display:flex; gap:8px; margin-bottom:20px; }
   .auth-tabs button{
@@ -37,12 +37,12 @@
   .auth-form{ display:none; }
   .auth-form.active{ display:block; }
 
-  header{ background:#fff; border-bottom:1px solid var(--border); padding:14px 32px; display:flex; align-items:center; gap:32px; position:sticky; top:0; z-index:30; }
+  header{ background:var(--card-bg); border-bottom:1px solid var(--border); padding:14px 32px; display:flex; align-items:center; gap:32px; position:sticky; top:0; z-index:30; }
   .logo{ font-size:24px; font-weight:800; color:var(--purple); margin-right:8px; cursor:pointer; user-select:none; }
   nav{ display:flex; gap:8px; flex:1; }
   nav button{ border:none; background:transparent; padding:10px 18px; border-radius:10px; font-size:15px; font-weight:600; color:var(--muted); cursor:pointer; transition:background .15s, color .15s; }
   nav button.active{ background:var(--purple-bg); color:var(--purple); }
-  nav button:hover{ background:#f3f4f6; }
+  nav button:hover{ background:var(--border); }
   nav button.active:hover{ background:var(--purple-bg); }
   .header-right{ display:flex; align-items:center; gap:18px; position:relative; }
   .bell{ font-size:20px; cursor:pointer; position:relative; }
@@ -51,7 +51,7 @@
   .avatar{ width:38px; height:38px; border-radius:50%; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; cursor:pointer; flex-shrink:0; }
   .avatar.sm{ width:32px; height:32px; font-size:12px; }
   .dropdown-wrap{ position:relative; }
-  .dropdown{ position:absolute; top:calc(100% + 10px); right:0; background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 28px rgba(0,0,0,.12); min-width:240px; padding:8px; display:none; z-index:40; }
+  .dropdown{ position:absolute; top:calc(100% + 10px); right:0; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:0 16px 36px rgba(0,0,0,.5); min-width:240px; padding:8px; display:none; z-index:40; }
   .dropdown.open{ display:block; }
   .dropdown-title{ font-weight:700; font-size:14px; padding:8px 10px 4px; }
   .dropdown-item{ padding:10px 12px; border-radius:10px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:10px; }
@@ -76,7 +76,7 @@
   .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
   .chip{ background:var(--purple-bg); color:var(--purple); font-size:13px; font-weight:600; padding:6px 10px; border-radius:8px; display:flex; align-items:center; gap:6px; }
   .chip .x{ cursor:pointer; font-weight:800; }
-  .emoji-picker{ position:absolute; bottom:calc(100% + 8px); left:0; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,.12); padding:10px; display:none; gap:6px; grid-template-columns:repeat(6,1fr); z-index:40; }
+  .emoji-picker{ position:absolute; bottom:calc(100% + 8px); left:0; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 16px 36px rgba(0,0,0,.5); padding:10px; display:none; gap:6px; grid-template-columns:repeat(6,1fr); z-index:40; }
   .emoji-picker.open{ display:grid; }
   .emoji-picker span{ font-size:20px; cursor:pointer; padding:4px; border-radius:8px; text-align:center; }
   .emoji-picker span:hover{ background:var(--bg); }
@@ -88,7 +88,7 @@
   .post-menu-wrap{ position:relative; }
   .post-menu{ color:var(--muted); cursor:pointer; font-size:18px; padding:2px 8px; border-radius:8px; }
   .post-menu:hover{ background:var(--bg); }
-  .post-dropdown{ position:absolute; top:calc(100% + 6px); right:0; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,.12); min-width:180px; padding:6px; display:none; z-index:35; }
+  .post-dropdown{ position:absolute; top:calc(100% + 6px); right:0; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 16px 36px rgba(0,0,0,.5); min-width:180px; padding:6px; display:none; z-index:35; }
   .post-dropdown.open{ display:block; }
   .post-text{ margin:14px 0 16px; font-size:15px; line-height:1.55; white-space:pre-wrap; }
   .post-image{ display:block; max-width:100%; max-height:520px; border-radius:12px; margin:14px 0 16px; object-fit:cover; }
@@ -124,7 +124,7 @@
   .view{ display:none; }
   .view.active{ display:block; }
 
-  .messages-layout{ display:flex; gap:0; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:#fff; min-height:480px; }
+  .messages-layout{ display:flex; gap:0; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card-bg); min-height:480px; }
   .conv-list{ width:280px; border-right:1px solid var(--border); padding:8px; overflow-y:auto; }
   .conv-list-header{ display:flex; justify-content:space-between; align-items:center; padding:10px 8px; }
   .new-msg-btn{ background:var(--purple-bg); color:var(--purple); border:none; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
@@ -145,8 +145,8 @@
   /* ---------- search ---------- */
   .header-search{ position:relative; flex:0 1 240px; }
   .header-search input{ width:100%; border:1px solid var(--border); background:var(--bg); border-radius:20px; padding:8px 14px; font-size:13.5px; outline:none; font-family:inherit; }
-  .header-search input:focus{ border-color:var(--purple-light); background:#fff; }
-  .search-results{ position:absolute; top:calc(100% + 8px); left:0; right:0; background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 28px rgba(0,0,0,.12); max-height:340px; overflow-y:auto; display:none; z-index:40; }
+  .header-search input:focus{ border-color:var(--purple-light); background:var(--card-bg); }
+  .search-results{ position:absolute; top:calc(100% + 8px); left:0; right:0; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; box-shadow:0 16px 36px rgba(0,0,0,.5); max-height:340px; overflow-y:auto; display:none; z-index:40; }
   .search-results.open{ display:block; }
 
   /* ---------- clickable user ---------- */
@@ -159,7 +159,7 @@
   /* ---------- modal ---------- */
   .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:90; }
   .modal-overlay.open{ display:flex; }
-  .modal-box{ background:#fff; border-radius:16px; padding:26px; width:380px; max-width:92vw; }
+  .modal-box{ background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:26px; width:380px; max-width:92vw; box-shadow:0 20px 50px rgba(0,0,0,.5); }
   .modal-title{ font-weight:800; font-size:17px; margin-bottom:16px; }
   .modal-box label{ font-size:13px; font-weight:600; color:var(--muted); display:block; margin:12px 0 6px; }
   .modal-box input[type=text], .modal-box textarea{ width:100%; border:1px solid var(--border); border-radius:10px; padding:10px 13px; font-size:14px; font-family:inherit; outline:none; resize:none; }
@@ -195,6 +195,39 @@
   .profile-bio{ margin-top:10px; font-size:14px; color:var(--text); white-space:pre-wrap; }
   .back-link{ color:var(--purple); font-weight:600; font-size:13.5px; cursor:pointer; margin-bottom:12px; display:inline-block; }
 
+  /* ---------- founder badge ---------- */
+  .founder-crown{ display:inline-flex; align-items:center; gap:4px; background:linear-gradient(135deg,#8b5cf6,#d946ef); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px; margin-left:6px; vertical-align:middle; }
+
+  /* ---------- friends ---------- */
+  .friend-actions{ margin-top:14px; display:flex; gap:10px; }
+  .friend-btn{ border:none; border-radius:10px; padding:9px 18px; font-weight:700; font-size:13.5px; cursor:pointer; transition:background .15s,transform .15s; }
+  .friend-btn:active{ transform:scale(.96); }
+  .friend-btn.add{ background:var(--purple); color:#fff; }
+  .friend-btn.add:hover{ background:var(--purple-light); }
+  .friend-btn.pending{ background:var(--border); color:var(--muted); }
+  .friend-btn.accept{ background:#22c55e; color:#fff; }
+  .friend-btn.decline, .friend-btn.remove{ background:var(--border); color:var(--text); }
+  .friend-btn.decline:hover, .friend-btn.remove:hover{ background:#3a3a52; }
+  .friend-req-item{ display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border); }
+  .friend-req-item:last-child{ border-bottom:none; }
+  .friend-req-name{ flex:1; font-weight:600; font-size:14px; }
+  .friend-req-actions{ display:flex; gap:6px; }
+  .friend-req-actions button{ border:none; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .friend-req-actions .acc{ background:#22c55e; color:#fff; }
+  .friend-req-actions .dec{ background:var(--border); color:var(--text); }
+
+  /* ---------- email verification ---------- */
+  .verify-row{ display:flex; align-items:center; gap:10px; margin-top:14px; padding:12px; border-radius:10px; background:var(--bg); border:1px solid var(--border); }
+  .verify-badge{ font-size:12px; font-weight:700; padding:3px 9px; border-radius:8px; }
+  .verify-badge.yes{ background:rgba(34,197,94,.18); color:#22c55e; }
+  .verify-badge.no{ background:rgba(244,63,94,.18); color:#f43f5e; }
+  .verify-btn{ background:var(--purple); color:#fff; border:none; padding:7px 14px; border-radius:8px; font-weight:600; font-size:12.5px; cursor:pointer; margin-left:auto; }
+  .verify-btn:hover{ background:var(--purple-light); }
+  .verify-code-row{ display:none; gap:8px; margin-top:10px; }
+  .verify-code-row.open{ display:flex; }
+  .verify-code-row input{ flex:1; border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:14px; background:var(--card-bg); color:var(--text); outline:none; }
+  .verify-hint{ font-size:11.5px; color:var(--muted); margin-top:4px; }
+
   /* ---------- "alive" animations ---------- */
   @keyframes fadeInUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   .card{ animation:fadeInUp .28s ease both; transition:box-shadow .2s, transform .15s; }
@@ -203,7 +236,7 @@
   .action.liked span:first-child{ display:inline-block; animation:likePulse .35s ease; }
   .avatar, .publish-btn, nav button, .tab, .conv-item, .dropdown-item, .post-menu, .bell{ transition:background .15s, color .15s, transform .15s; }
   nav button:active, .publish-btn:active{ transform:scale(.96); }
-  .skeleton{ background:linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%); background-size:400% 100%; animation:skeleton-loading 1.4s ease infinite; border-radius:8px; }
+  .skeleton{ background:linear-gradient(90deg,#1c1c2a 25%,#23233a 37%,#1c1c2a 63%); background-size:400% 100%; animation:skeleton-loading 1.4s ease infinite; border-radius:8px; }
   @keyframes skeleton-loading{ 0%{ background-position:100% 50%; } 100%{ background-position:0 50%; } }
 
   /* ---------- mobile / responsive ---------- */
@@ -221,7 +254,7 @@
     .msg-bubble{ max-width:84%; }
     .modal-box{ width:94vw; }
     .bottom-nav{
-      display:flex; position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--border);
+      display:flex; position:fixed; bottom:0; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border);
       z-index:50; padding:6px 4px env(safe-area-inset-bottom, 6px);
     }
     .bottom-nav button{
@@ -335,6 +368,7 @@
         </div>
         <div class="stat-row">
           <div class="stat"><div class="num" id="overviewPostCount">0</div><div class="lbl">Пости</div></div>
+          <div class="stat"><div class="num" id="overviewFriendsCount">0</div><div class="lbl">Друзі</div></div>
         </div>
       </div>
     </div>
@@ -352,12 +386,18 @@
         </div>
         <div class="stat-row">
           <div class="stat"><div class="num" id="profilePostCount">0</div><div class="lbl">Пости</div></div>
+          <div class="stat"><div class="num" id="profileFriendsCount">0</div><div class="lbl">Друзі</div></div>
         </div>
+        <div class="friend-actions" id="profileFriendActions"></div>
       </div>
       <div id="profilePosts"></div>
     </div>
 
     <div id="view-notifications" class="view">
+      <div class="card" id="friendRequestsCard" style="display:none;">
+        <div class="dropdown-title" style="padding-left:0;">Запити в друзі</div>
+        <div id="friendRequestsList"></div>
+      </div>
       <div class="card">
         <div class="dropdown-title" style="padding-left:0;">Усі сповіщення</div>
         <div id="fullNotifList"><div class="placeholder-card"><div class="big">🔔</div>Сповіщення про лайки, коментарі та підписки з'являться тут.</div></div>
@@ -443,6 +483,18 @@
     <input type="text" id="settingsName" maxlength="60">
     <label for="settingsBio">Про себе</label>
     <textarea id="settingsBio" rows="3" maxlength="280"></textarea>
+
+    <div class="verify-row">
+      <span>📧 Email</span>
+      <span class="verify-badge" id="verifyBadge"></span>
+      <button class="verify-btn" id="verifySendBtn" type="button">Підтвердити</button>
+    </div>
+    <div class="verify-code-row" id="verifyCodeRow">
+      <input type="text" id="verifyCodeInput" placeholder="Код підтвердження" maxlength="6">
+      <button class="modal-save" id="verifyConfirmBtn" type="button" style="padding:8px 14px;">OK</button>
+    </div>
+    <div class="verify-hint" id="verifyHint"></div>
+
     <div class="modal-actions">
       <button class="modal-cancel" id="settingsCancelBtn" type="button">Скасувати</button>
       <button class="modal-save" id="settingsSaveBtn" type="button">Зберегти</button>
