@@ -2,11 +2,14 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const url = require("node:url");
+const crypto = require("node:crypto");
 const db = require("./db");
 const { hashPassword, makeSalt, verifyPassword, makeToken, verifyToken, pickAvatarColor } = require("./auth");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
+const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -15,15 +18,26 @@ const MIME = {
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
   ".svg": "image/svg+xml"
 };
+
+const ALLOWED_IMAGE_TYPES = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp"
+};
+const MAX_IMAGE_BYTES = 6_000_000;
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = "";
     req.on("data", chunk => {
       data += chunk;
-      if (data.length > 2_000_000) {
+      if (data.length > 9_000_000) {
         reject(new Error("Payload too large"));
         req.destroy();
       }
@@ -38,6 +52,22 @@ function readBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+// Accepts a data URL like "data:image/png;base64,AAAA..." and saves it to
+// the uploads folder. Returns the public URL path, or null if invalid.
+function saveImageFromDataUrl(dataUrl) {
+  if (typeof dataUrl !== "string") return null;
+  const match = dataUrl.match(/^data:([\w/+.-]+);base64,(.+)$/s);
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  const ext = ALLOWED_IMAGE_TYPES[mime];
+  if (!ext) return null;
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
+  const filename = crypto.randomUUID() + ext;
+  fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
+  return "/uploads/" + filename;
 }
 
 function sendJson(res, status, obj) {
@@ -56,10 +86,29 @@ function publicUser(row) {
     name: row.name,
     email: row.email,
     avatarColor: row.avatar_color,
+    avatarUrl: row.avatar_url || null,
     bio: row.bio || "",
     isAdmin: !!row.is_admin,
     createdAt: row.created_at
   };
+}
+
+function briefUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    avatarColor: row.avatar_color,
+    avatarUrl: row.avatar_url || null,
+    initials: initials(row.name),
+    isAdmin: !!row.is_admin
+  };
+}
+
+function notify(userId, actorId, type, postId) {
+  if (userId === actorId) return; // don't notify yourself
+  db.prepare("INSERT INTO notifications (user_id, actor_id, type, post_id, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(userId, actorId, type, postId || null, Date.now());
 }
 
 // If a user's email matches ADMIN_EMAIL, make sure they're flagged as admin.
@@ -91,6 +140,12 @@ function getAuthUser(req) {
   return row || null;
 }
 
+function deleteImageFile(imageUrl) {
+  if (!imageUrl || !imageUrl.startsWith("/uploads/")) return;
+  const filePath = path.join(PUBLIC_DIR, imageUrl);
+  fs.unlink(filePath, () => {});
+}
+
 function postWithMeta(row, meId) {
   const likeCount = db.prepare("SELECT COUNT(*) AS c FROM likes WHERE post_id = ?").get(row.id).c;
   const likedByMe = meId
@@ -101,11 +156,12 @@ function postWithMeta(row, meId) {
   return {
     id: row.id,
     text: row.text,
+    imageUrl: row.image_url || null,
     createdAt: row.created_at,
     likeCount,
     likedByMe,
     commentCount,
-    author: author ? { id: author.id, name: author.name, avatarColor: author.avatar_color, initials: initials(author.name), isAdmin: !!author.is_admin } : null
+    author: briefUser(author)
   };
 }
 
@@ -190,6 +246,39 @@ route("GET", "/api/me", requireAuth(async (req, res, params, me) => {
   sendJson(res, 200, { user: publicUser(me) });
 }));
 
+route("PUT", "/api/me", requireAuth(async (req, res, params, me) => {
+  const body = await readBody(req);
+  const updates = [];
+  const values = [];
+
+  if (typeof body.name === "string") {
+    const name = body.name.trim();
+    if (!name) return sendJson(res, 400, { error: "Ім'я не може бути порожнім" });
+    updates.push("name = ?");
+    values.push(name);
+  }
+  if (typeof body.bio === "string") {
+    updates.push("bio = ?");
+    values.push(body.bio.trim().slice(0, 280));
+  }
+  if (body.avatar) {
+    const avatarUrl = saveImageFromDataUrl(body.avatar);
+    if (!avatarUrl) {
+      return sendJson(res, 400, { error: "Не вдалося завантажити фото профілю (до 6 МБ, png/jpg/gif/webp)" });
+    }
+    deleteImageFile(me.avatar_url);
+    updates.push("avatar_url = ?");
+    values.push(avatarUrl);
+  }
+  if (!updates.length) {
+    return sendJson(res, 400, { error: "Немає змін для збереження" });
+  }
+  values.push(me.id);
+  db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+  const updated = db.prepare("SELECT * FROM users WHERE id = ?").get(me.id);
+  sendJson(res, 200, { user: publicUser(updated) });
+}));
+
 /* ---------------- ADMIN ---------------- */
 
 route("GET", "/api/admin/stats", requireAdmin(async (req, res, params, me) => {
@@ -208,6 +297,7 @@ route("GET", "/api/admin/users", requireAdmin(async (req, res, params, me) => {
 route("DELETE", "/api/admin/posts/:id", requireAdmin(async (req, res, params, me) => {
   const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(params.id);
   if (!post) return sendJson(res, 404, { error: "Пост не знайдено" });
+  deleteImageFile(post.image_url);
   db.prepare("DELETE FROM posts WHERE id = ?").run(params.id);
   db.prepare("DELETE FROM likes WHERE post_id = ?").run(params.id);
   db.prepare("DELETE FROM comments WHERE post_id = ?").run(params.id);
@@ -232,6 +322,28 @@ route("DELETE", "/api/admin/users/:id", requireAdmin(async (req, res, params, me
   sendJson(res, 200, { ok: true });
 }));
 
+/* ---------------- NOTIFICATIONS ---------------- */
+
+route("GET", "/api/notifications", requireAuth(async (req, res, params, me) => {
+  const rows = db.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50").all(me.id);
+  const notifications = rows.map(n => {
+    const actor = db.prepare("SELECT * FROM users WHERE id = ?").get(n.actor_id);
+    let post = null;
+    if (n.post_id) {
+      const p = db.prepare("SELECT * FROM posts WHERE id = ?").get(n.post_id);
+      if (p) post = { id: p.id, text: p.text };
+    }
+    return { id: n.id, type: n.type, actor: briefUser(actor), post, read: !!n.read_flag, createdAt: n.created_at };
+  });
+  const unreadCount = db.prepare("SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_flag = 0").get(me.id).c;
+  sendJson(res, 200, { notifications, unreadCount });
+}));
+
+route("POST", "/api/notifications/read", requireAuth(async (req, res, params, me) => {
+  db.prepare("UPDATE notifications SET read_flag = 1 WHERE user_id = ?").run(me.id);
+  sendJson(res, 200, { ok: true });
+}));
+
 /* ---------------- POSTS ---------------- */
 
 route("GET", "/api/posts", requireAuth(async (req, res, params, me) => {
@@ -242,9 +354,22 @@ route("GET", "/api/posts", requireAuth(async (req, res, params, me) => {
 route("POST", "/api/posts", requireAuth(async (req, res, params, me) => {
   const body = await readBody(req);
   const text = (body.text || "").trim();
-  if (!text) return sendJson(res, 400, { error: "Текст поста не може бути порожнім" });
+
+  let imageUrl = null;
+  if (body.image) {
+    imageUrl = saveImageFromDataUrl(body.image);
+    if (!imageUrl) {
+      return sendJson(res, 400, { error: "Не вдалося завантажити зображення (перевірте формат і розмір — до 6 МБ)" });
+    }
+  }
+
+  if (!text && !imageUrl) {
+    return sendJson(res, 400, { error: "Текст поста не може бути порожнім" });
+  }
   const now = Date.now();
-  const result = db.prepare("INSERT INTO posts (user_id, text, created_at) VALUES (?, ?, ?)").run(me.id, text, now);
+  const result = db
+    .prepare("INSERT INTO posts (user_id, text, image_url, created_at) VALUES (?, ?, ?, ?)")
+    .run(me.id, text, imageUrl, now);
   const row = db.prepare("SELECT * FROM posts WHERE id = ?").get(result.lastInsertRowid);
   sendJson(res, 201, { post: postWithMeta(row, me.id) });
 }));
@@ -253,6 +378,7 @@ route("DELETE", "/api/posts/:id", requireAuth(async (req, res, params, me) => {
   const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(params.id);
   if (!post) return sendJson(res, 404, { error: "Пост не знайдено" });
   if (post.user_id !== me.id && !me.is_admin) return sendJson(res, 403, { error: "Можна видаляти лише свої пости" });
+  deleteImageFile(post.image_url);
   db.prepare("DELETE FROM posts WHERE id = ?").run(params.id);
   db.prepare("DELETE FROM likes WHERE post_id = ?").run(params.id);
   db.prepare("DELETE FROM comments WHERE post_id = ?").run(params.id);
@@ -267,6 +393,7 @@ route("POST", "/api/posts/:id/like", requireAuth(async (req, res, params, me) =>
     db.prepare("DELETE FROM likes WHERE post_id = ? AND user_id = ?").run(params.id, me.id);
   } else {
     db.prepare("INSERT INTO likes (post_id, user_id) VALUES (?, ?)").run(params.id, me.id);
+    notify(post.user_id, me.id, "like", post.id);
   }
   const row = db.prepare("SELECT * FROM posts WHERE id = ?").get(params.id);
   sendJson(res, 200, { post: postWithMeta(row, me.id) });
@@ -280,7 +407,7 @@ route("GET", "/api/posts/:id/comments", requireAuth(async (req, res, params) => 
       id: c.id,
       text: c.text,
       createdAt: c.created_at,
-      author: author ? { id: author.id, name: author.name, avatarColor: author.avatar_color, initials: initials(author.name) } : null
+      author: briefUser(author)
     };
   });
   sendJson(res, 200, { comments });
@@ -294,12 +421,13 @@ route("POST", "/api/posts/:id/comments", requireAuth(async (req, res, params, me
   if (!text) return sendJson(res, 400, { error: "Коментар не може бути порожнім" });
   const now = Date.now();
   const result = db.prepare("INSERT INTO comments (post_id, user_id, text, created_at) VALUES (?, ?, ?, ?)").run(params.id, me.id, text, now);
+  notify(post.user_id, me.id, "comment", post.id);
   sendJson(res, 201, {
     comment: {
       id: result.lastInsertRowid,
       text,
       createdAt: now,
-      author: { id: me.id, name: me.name, avatarColor: me.avatar_color, initials: initials(me.name) }
+      author: briefUser(me)
     }
   });
 }));
@@ -307,11 +435,32 @@ route("POST", "/api/posts/:id/comments", requireAuth(async (req, res, params, me
 /* ---------------- USERS / MESSAGING ---------------- */
 
 route("GET", "/api/users", requireAuth(async (req, res, params, me) => {
-  const rows = db.prepare("SELECT * FROM users WHERE id != ? ORDER BY name ASC").all(me.id);
+  const parsed = url.parse(req.url, true);
+  const q = (parsed.query.q || "").toString().trim().toLowerCase();
+  let rows = db.prepare("SELECT * FROM users WHERE id != ? ORDER BY name ASC").all(me.id);
+  if (q) {
+    rows = rows.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }
   sendJson(res, 200, { users: rows.map(publicUser) });
 }));
 
+route("GET", "/api/users/:id", requireAuth(async (req, res, params, me) => {
+  const targetId = parseInt(params.id, 10);
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(targetId);
+  if (!user) return sendJson(res, 404, { error: "Користувача не знайдено" });
+  const postCount = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE user_id = ?").get(targetId).c;
+  sendJson(res, 200, { user: Object.assign(publicUser(user), { postCount }) });
+}));
+
+route("GET", "/api/users/:id/posts", requireAuth(async (req, res, params, me) => {
+  const targetId = parseInt(params.id, 10);
+  const rows = db.prepare("SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC").all(targetId);
+  sendJson(res, 200, { posts: rows.map(r => postWithMeta(r, me.id)) });
+}));
+
 route("GET", "/api/conversations", requireAuth(async (req, res, params, me) => {
+  const parsed = url.parse(req.url, true);
+  const q = (parsed.query.q || "").toString().trim().toLowerCase();
   const rows = db
     .prepare(
       `SELECT * FROM messages WHERE sender_id = ? OR receiver_id = ? ORDER BY created_at DESC`
@@ -329,9 +478,11 @@ route("GET", "/api/conversations", requireAuth(async (req, res, params, me) => {
   for (const [otherId, lastMsg] of seen.entries()) {
     const other = db.prepare("SELECT * FROM users WHERE id = ?").get(otherId);
     if (!other) continue;
+    if (q && !other.name.toLowerCase().includes(q)) continue;
+    const previewText = lastMsg.text || (lastMsg.image_url ? "📷 Фото" : "");
     conversations.push({
-      user: { id: other.id, name: other.name, avatarColor: other.avatar_color, initials: initials(other.name) },
-      lastMessage: { text: lastMsg.text, createdAt: lastMsg.created_at, fromMe: lastMsg.sender_id === me.id }
+      user: briefUser(other),
+      lastMessage: { text: previewText, createdAt: lastMsg.created_at, fromMe: lastMsg.sender_id === me.id }
     });
   }
   conversations.sort((a, b) => b.lastMessage.createdAt - a.lastMessage.createdAt);
@@ -347,14 +498,30 @@ route("GET", "/api/messages/:userId", requireAuth(async (req, res, params, me) =
        ORDER BY created_at ASC`
     )
     .all(me.id, otherId, otherId, me.id);
-  sendJson(res, 200, {
-    messages: rows.map(m => ({
+
+  const messages = rows.map(m => {
+    const fromMe = m.sender_id === me.id;
+    let imageUrl = m.image_url || null;
+    let viewOnceConsumed = false;
+    if (m.view_once && imageUrl && !fromMe) {
+      if (m.viewed_at) {
+        imageUrl = null;
+        viewOnceConsumed = true;
+      } else {
+        db.prepare("UPDATE messages SET viewed_at = ? WHERE id = ?").run(Date.now(), m.id);
+      }
+    }
+    return {
       id: m.id,
       text: m.text,
+      imageUrl,
+      viewOnce: !!m.view_once,
+      viewOnceConsumed,
       createdAt: m.created_at,
-      fromMe: m.sender_id === me.id
-    }))
+      fromMe
+    };
   });
+  sendJson(res, 200, { messages });
 }));
 
 route("POST", "/api/messages/:userId", requireAuth(async (req, res, params, me) => {
@@ -363,12 +530,28 @@ route("POST", "/api/messages/:userId", requireAuth(async (req, res, params, me) 
   if (!other) return sendJson(res, 404, { error: "Користувача не знайдено" });
   const body = await readBody(req);
   const text = (body.text || "").trim();
-  if (!text) return sendJson(res, 400, { error: "Повідомлення не може бути порожнім" });
+  let imageUrl = null;
+  if (body.image) {
+    imageUrl = saveImageFromDataUrl(body.image);
+    if (!imageUrl) return sendJson(res, 400, { error: "Не вдалося завантажити зображення (до 6 МБ, png/jpg/gif/webp)" });
+  }
+  if (!text && !imageUrl) return sendJson(res, 400, { error: "Повідомлення не може бути порожнім" });
+  const viewOnce = body.viewOnce ? 1 : 0;
   const now = Date.now();
   const result = db
-    .prepare("INSERT INTO messages (sender_id, receiver_id, text, created_at) VALUES (?, ?, ?, ?)")
-    .run(me.id, otherId, text, now);
-  sendJson(res, 201, { message: { id: result.lastInsertRowid, text, createdAt: now, fromMe: true } });
+    .prepare("INSERT INTO messages (sender_id, receiver_id, text, image_url, view_once, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(me.id, otherId, text, imageUrl, viewOnce, now);
+  sendJson(res, 201, {
+    message: {
+      id: result.lastInsertRowid,
+      text,
+      imageUrl,
+      viewOnce: !!viewOnce,
+      viewOnceConsumed: false,
+      createdAt: now,
+      fromMe: true
+    }
+  });
 }));
 
 /* ---------------- STATIC FILE SERVING ---------------- */

@@ -15,6 +15,7 @@ db.exec(`
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
     avatar_color TEXT NOT NULL,
+    avatar_url TEXT,
     bio TEXT DEFAULT '',
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
@@ -24,6 +25,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     text TEXT NOT NULL,
+    image_url TEXT,
     created_at INTEGER NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
@@ -47,15 +49,34 @@ db.exec(`
     sender_id INTEGER NOT NULL,
     receiver_id INTEGER NOT NULL,
     text TEXT NOT NULL,
+    image_url TEXT,
+    view_once INTEGER NOT NULL DEFAULT 0,
+    viewed_at INTEGER,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    actor_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    post_id INTEGER,
+    read_flag INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   );
 `);
 
-// Migration for databases created before is_admin existed
-try {
-  db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
-} catch (e) {
-  // column already exists, ignore
+// Migrations for databases created before these columns existed
+const migrations = [
+  "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN avatar_url TEXT",
+  "ALTER TABLE posts ADD COLUMN image_url TEXT",
+  "ALTER TABLE messages ADD COLUMN image_url TEXT",
+  "ALTER TABLE messages ADD COLUMN view_once INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE messages ADD COLUMN viewed_at INTEGER"
+];
+for (const sql of migrations) {
+  try { db.exec(sql); } catch (e) { /* column already exists, ignore */ }
 }
 
 module.exports = db;
