@@ -64,6 +64,16 @@ db.exec(`
     read_flag INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id INTEGER NOT NULL,
+    to_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    responded_at INTEGER,
+    UNIQUE(from_id, to_id)
+  );
 `);
 
 // Migrations for databases created before these columns existed
@@ -73,7 +83,9 @@ const migrations = [
   "ALTER TABLE posts ADD COLUMN image_url TEXT",
   "ALTER TABLE messages ADD COLUMN image_url TEXT",
   "ALTER TABLE messages ADD COLUMN view_once INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE messages ADD COLUMN viewed_at INTEGER"
+  "ALTER TABLE messages ADD COLUMN viewed_at INTEGER",
+  "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN verification_code TEXT"
 ];
 for (const sql of migrations) {
   try { db.exec(sql); } catch (e) { /* column already exists, ignore */ }

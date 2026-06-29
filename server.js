@@ -89,8 +89,35 @@ function publicUser(row) {
     avatarUrl: row.avatar_url || null,
     bio: row.bio || "",
     isAdmin: !!row.is_admin,
+    emailVerified: !!row.email_verified,
     createdAt: row.created_at
   };
+}
+
+/* ---------------- FRIENDS ---------------- */
+
+function getFriendRequestRow(aId, bId) {
+  return db.prepare("SELECT * FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)").get(aId, bId, bId, aId);
+}
+
+function friendStatus(meId, otherId) {
+  if (meId === otherId) return "self";
+  const fr = getFriendRequestRow(meId, otherId);
+  if (!fr) return "none";
+  if (fr.status === "accepted") return "friends";
+  if (fr.status === "pending") return fr.from_id === meId ? "request_sent" : "request_received";
+  return "none";
+}
+
+function friendsCount(userId) {
+  return db.prepare("SELECT COUNT(*) AS c FROM friend_requests WHERE status = 'accepted' AND (from_id = ? OR to_id = ?)").get(userId, userId).c;
+}
+
+function friendsList(userId) {
+  const rows = db.prepare("SELECT * FROM friend_requests WHERE status = 'accepted' AND (from_id = ? OR to_id = ?)").all(userId, userId);
+  return rows
+    .map(r => db.prepare("SELECT * FROM users WHERE id = ?").get(r.from_id === userId ? r.to_id : r.from_id))
+    .filter(Boolean);
 }
 
 function briefUser(row) {
@@ -344,6 +371,89 @@ route("POST", "/api/notifications/read", requireAuth(async (req, res, params, me
   sendJson(res, 200, { ok: true });
 }));
 
+/* ---------------- FRIEND REQUESTS ---------------- */
+
+route("POST", "/api/friends/:id/request", requireAuth(async (req, res, params, me) => {
+  const otherId = parseInt(params.id, 10);
+  if (otherId === me.id) return sendJson(res, 400, { error: "Не можна додати себе в друзі" });
+  const other = db.prepare("SELECT * FROM users WHERE id = ?").get(otherId);
+  if (!other) return sendJson(res, 404, { error: "Користувача не знайдено" });
+
+  const existing = getFriendRequestRow(me.id, otherId);
+  if (existing) {
+    if (existing.status === "accepted") return sendJson(res, 400, { error: "Ви вже друзі" });
+    if (existing.status === "pending") {
+      if (existing.from_id === me.id) return sendJson(res, 400, { error: "Запит вже надіслано" });
+      db.prepare("UPDATE friend_requests SET status = 'accepted', responded_at = ? WHERE id = ?").run(Date.now(), existing.id);
+      notify(otherId, me.id, "friend_accept", null);
+      return sendJson(res, 200, { status: "friends" });
+    }
+    db.prepare("DELETE FROM friend_requests WHERE id = ?").run(existing.id);
+  }
+  db.prepare("INSERT INTO friend_requests (from_id, to_id, status, created_at) VALUES (?, ?, 'pending', ?)").run(me.id, otherId, Date.now());
+  notify(otherId, me.id, "friend_request", null);
+  sendJson(res, 201, { status: "request_sent" });
+}));
+
+route("POST", "/api/friends/:id/accept", requireAuth(async (req, res, params, me) => {
+  const otherId = parseInt(params.id, 10);
+  const fr = db.prepare("SELECT * FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'").get(otherId, me.id);
+  if (!fr) return sendJson(res, 404, { error: "Запит не знайдено" });
+  db.prepare("UPDATE friend_requests SET status = 'accepted', responded_at = ? WHERE id = ?").run(Date.now(), fr.id);
+  notify(otherId, me.id, "friend_accept", null);
+  sendJson(res, 200, { status: "friends" });
+}));
+
+route("POST", "/api/friends/:id/decline", requireAuth(async (req, res, params, me) => {
+  const otherId = parseInt(params.id, 10);
+  const fr = db.prepare("SELECT * FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'").get(otherId, me.id);
+  if (!fr) return sendJson(res, 404, { error: "Запит не знайдено" });
+  db.prepare("DELETE FROM friend_requests WHERE id = ?").run(fr.id);
+  sendJson(res, 200, { status: "none" });
+}));
+
+route("DELETE", "/api/friends/:id", requireAuth(async (req, res, params, me) => {
+  const otherId = parseInt(params.id, 10);
+  db.prepare("DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)").run(me.id, otherId, otherId, me.id);
+  sendJson(res, 200, { status: "none" });
+}));
+
+route("GET", "/api/friends/requests", requireAuth(async (req, res, params, me) => {
+  const rows = db.prepare("SELECT * FROM friend_requests WHERE to_id = ? AND status = 'pending' ORDER BY created_at DESC").all(me.id);
+  const requests = rows.map(r => ({
+    id: r.id,
+    from: briefUser(db.prepare("SELECT * FROM users WHERE id = ?").get(r.from_id)),
+    createdAt: r.created_at
+  }));
+  sendJson(res, 200, { requests });
+}));
+
+route("GET", "/api/users/:id/friends", requireAuth(async (req, res, params, me) => {
+  const targetId = parseInt(params.id, 10);
+  sendJson(res, 200, { friends: friendsList(targetId).map(briefUser) });
+}));
+
+/* ---------------- EMAIL VERIFICATION (no real SMTP — code shown directly) ---------------- */
+
+route("POST", "/api/me/send-verification", requireAuth(async (req, res, params, me) => {
+  if (me.email_verified) return sendJson(res, 400, { error: "Email вже підтверджено" });
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  db.prepare("UPDATE users SET verification_code = ? WHERE id = ?").run(code, me.id);
+  sendJson(res, 200, { code, note: "Демо-режим: лист не надсилається на реальну пошту, код показано прямо тут" });
+}));
+
+route("POST", "/api/me/verify-email", requireAuth(async (req, res, params, me) => {
+  const body = await readBody(req);
+  const code = (body.code || "").trim();
+  const row = db.prepare("SELECT verification_code FROM users WHERE id = ?").get(me.id);
+  if (!row.verification_code || row.verification_code !== code) {
+    return sendJson(res, 400, { error: "Невірний код підтвердження" });
+  }
+  db.prepare("UPDATE users SET email_verified = 1, verification_code = NULL WHERE id = ?").run(me.id);
+  const updated = db.prepare("SELECT * FROM users WHERE id = ?").get(me.id);
+  sendJson(res, 200, { user: publicUser(updated) });
+}));
+
 /* ---------------- POSTS ---------------- */
 
 route("GET", "/api/posts", requireAuth(async (req, res, params, me) => {
@@ -441,7 +551,7 @@ route("GET", "/api/users", requireAuth(async (req, res, params, me) => {
   if (q) {
     rows = rows.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   }
-  sendJson(res, 200, { users: rows.map(publicUser) });
+  sendJson(res, 200, { users: rows.map(u => Object.assign(publicUser(u), { friendStatus: friendStatus(me.id, u.id) })) });
 }));
 
 route("GET", "/api/users/:id", requireAuth(async (req, res, params, me) => {
@@ -449,7 +559,13 @@ route("GET", "/api/users/:id", requireAuth(async (req, res, params, me) => {
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(targetId);
   if (!user) return sendJson(res, 404, { error: "Користувача не знайдено" });
   const postCount = db.prepare("SELECT COUNT(*) AS c FROM posts WHERE user_id = ?").get(targetId).c;
-  sendJson(res, 200, { user: Object.assign(publicUser(user), { postCount }) });
+  sendJson(res, 200, {
+    user: Object.assign(publicUser(user), {
+      postCount,
+      friendsCount: friendsCount(targetId),
+      friendStatus: friendStatus(me.id, targetId)
+    })
+  });
 }));
 
 route("GET", "/api/users/:id/posts", requireAuth(async (req, res, params, me) => {
